@@ -1,0 +1,130 @@
+# =============================================
+# COMANDI DOCKER UTILI PER IL PROGETTO VOLLEYBALL
+# =============================================
+
+# 1. AVVIO E GESTIONE COMPOSITE
+# Avviare tutti i servizi in background
+docker-compose up -d
+
+# Fermare tutti i servizi mantenendo i volumi
+docker-compose down
+
+# Riavviare un servizio specifico
+docker-compose restart <servizio>  # es: docker-compose restart spark-volley
+
+# Ricostruire e riavviare un servizio
+docker-compose up -d --build <servizio>
+
+# Visualizzare i log di un servizio
+docker-compose logs -f <servizio>
+
+# 2. GESTIONE CONTAINER
+# Lista container in esecuzione
+docker ps
+
+# Lista tutti i container (anche fermati)
+docker ps -a
+
+# Fermare un container
+docker stop <nome_container>
+
+# Avviare un container fermato
+docker start <nome_container>
+
+# Riavviare un container
+docker restart <nome_container>
+
+# Rimuovere un container (deve essere fermato)
+docker rm <nome_container>
+
+# Accesso shell dentro un container
+docker exec -it <nome_container> /bin/bash  # o /bin/sh
+
+# Monitoraggio risorse in tempo reale
+docker stats
+
+# 3. GESTIONE KAFKA
+# Elencare i topic
+docker exec kafka-volley kafka-topics.sh --list --bootstrap-server localhost:9092
+
+# Leggere messaggi da un topic
+docker exec kafka-volley kafka-console-consumer.sh \
+  --bootstrap-server localhost:9092 \
+  --topic matchvolley \
+  --from-beginning
+
+# Creare un nuovo topic
+docker exec kafka-volley kafka-topics.sh \
+  --create \
+  --bootstrap-server localhost:9092 \
+  --replication-factor 1 \
+  --partitions 3 \
+  --topic nuovo_topic
+
+# 4. ELASTICSEARCH/KIBANA
+# Verificare salute cluster
+curl -X GET "http://localhost:9200/_cat/health?v"
+
+# Elencare indici
+curl -X GET "http://localhost:9200/_cat/indices?v"
+
+# Visualizzare mapping di un indice
+curl -X GET "http://localhost:9200/volleyball_matches/_mapping?pretty"
+
+# Cercare documenti
+curl -X GET "http://localhost:9200/volleyball_matches/_search?pretty"
+
+# 5. GESTIONE LOGS
+# Logs in tempo reale
+docker logs -f <nome_container>
+
+# Ultime 100 righe di log
+docker logs --tail=100 <nome_container>
+
+# Logs con timestamp
+docker logs -t <nome_container>
+
+# 6. GESTIONE RETI E VOLUMI
+# Lista reti
+docker network ls
+
+# Dettagli rete
+docker network inspect network
+
+# Lista volumi
+docker volume ls
+
+# Pulizia volumi non utilizzati
+docker volume prune
+
+# 7. PULIZIA
+# Fermare e rimuovere tutto
+docker-compose down
+
+# Pulizia completa (ATTENZIONE: elimina tutto)
+docker system prune -a --volumes
+
+# 8. SPARK
+# Verifica log Spark
+docker exec -it spark-volley tail -f /opt/bitnami/spark/logs/spark--*.out
+
+# Accesso all'interfaccia Spark UI (se configurata)
+# Disponibile su: http://localhost:4040
+
+# 9. TROUBLESHOOTING
+# Verifica utilizzo disco
+docker system df
+
+# Dettaglio utilizzo spazio
+docker system df -v
+
+# Processi in esecuzione in un container
+docker top <nome_container>
+
+# =============================================
+# ALIAS CONSIGLIATI (da aggiungere a ~/.bashrc o ~/.zshrc)
+# =============================================
+# alias kafka-topics="docker exec kafka-volley kafka-topics.sh --bootstrap-server localhost:9092"
+# alias kafka-consumer="docker exec kafka-volley kafka-console-consumer.sh --bootstrap-server localhost:9092"
+# alias es-health="curl -X GET 'http://localhost:9200/_cat/health?v'"
+# alias docker-clean="docker system prune -a --volumes"

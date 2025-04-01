@@ -1,49 +1,75 @@
-from confluent_kafka import Producer
+import requests
+from kafka import KafkaProducer
 import json
 import time
-import random
-import socket
 
-def delivery_report(err, msg):
-    """Callback per verificare l'esito dell'invio"""
-    if err is not None:
-        print(f"Messaggio fallito: {err}")
-    else:
-        print(f"Messaggio inviato a {msg.topic()} [{msg.partition()}]")
+# Configurazione
+API_KEY = "AymenURP9kWkgEatcBdcYA"
+SEASON_ID = "47663"
+KAFKA_BROKER = "localhost:9092"  # Broker Kafka in locale
+TOPIC_NAME = "matchvolley"
 
-def main():
-    # Configurazione del producer
-    conf = {
-        'bootstrap.servers': 'localhost:9092',  # Sostituisci con 'kafka-volley:9092' se esegui in Docker
-        'client.id': socket.gethostname()
-    }
+# Endpoint API
+url = f"https://volleyball.sportdevs.com/matches?season_id=eq.{SEASON_ID}"
+headers = {
+    'Accept': 'application/json',
+    "Authorization": f"Bearer {API_KEY}"
+}
 
-    producer = Producer(conf)
+def get_matches():
+    """Recupera i dati grezzi dall'endpoint"""
+    try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        print(f"Errore nel recupero dati: {str(e)}")
+        return None
 
-    # Genera dati di esempio
-    matches = [
-        {
-            "match_id": i,
-            "team_a": "Team Alpha",
-            "team_b": "Team Beta",
-            "score_a": random.randint(10, 25),
-            "score_b": random.randint(10, 25),
-            "timestamp": int(time.time())
-        }
-        for i in range(1, 6)
-    ]
+def create_producer():
+    """Crea un producer Kafka una sola volta"""
+    return KafkaProducer(
+        bootstrap_servers=KAFKA_BROKER,
+        value_serializer=lambda v: json.dumps(v).encode('utf-8'),
+        acks=1
+    )
 
-    # Invio messaggi
+def success(metadata):
+    print(f"Messaggio inviato con successo a {metadata.topic} [partizione {metadata.partition}]")
+
+def failure(exception):
+    print(f"Errore nell'invio a Kafka: {exception}")
+
+def send_to_kafka(producer, matches):
+    """Invia i dati a Kafka con un producer riutilizzabile"""
     for match in matches:
-        producer.produce(
-            topic='matchvolley',
-            value=json.dumps(match).encode('utf-8'),
-            callback=delivery_report
-        )
-        print(f"Inviato: {match}")
-    
-    # Attesa completamento
+        producer.send(TOPIC_NAME, match).add_callback(success).add_errback(failure)
     producer.flush()
 
+def check_kafka_connection():
+    """Verifica se Kafka è attivo prima di inviare dati"""
+    try:
+        producer = KafkaProducer(bootstrap_servers=KAFKA_BROKER)
+        producer.close()
+        return True
+    except Exception as e:
+        print(f"Kafka non è raggiungibile: {str(e)}")
+        return False
+
 if __name__ == "__main__":
-    main()
+    print("Verifica connessione a Kafka...")
+    if check_kafka_connection():
+        producer = create_producer()
+        print("Recupero dati dall'API SportDevs...")
+        matches = get_matches()
+        
+        if matches:
+            print(f"Trovate {len(matches)} partite")
+            send_to_kafka(producer, matches)
+            print("Dati inviati con successo a Kafka")
+        else:
+            print("Nessun dato recuperato dall'API")
+        
+        producer.close()
+    else:
+        print("Errore: Kafka non è disponibile.")

@@ -1,53 +1,62 @@
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, from_json, from_unixtime
-from pyspark.sql.types import StructType, StructField, StringType, IntegerType, TimestampType
+from pyspark.sql.functions import from_json, col
+from pyspark.sql.types import StructType, StructField, StringType, IntegerType, FloatType, MapType
+from pyspark.sql.functions import current_timestamp
 
-# 1. Definizione dello schema per i dati in ingresso
-match_schema = StructType([
-    StructField("match_id", IntegerType(), False),
-    StructField("team_a", StringType(), False),
-    StructField("team_b", StringType(), False),
-    StructField("score_a", IntegerType(), False),
-    StructField("score_b", IntegerType(), False),
-    StructField("timestamp", IntegerType(), False)
-])
-
-# 2. Inizializzazione della SparkSession
+# Configurazione Spark
 spark = SparkSession.builder \
-    .appName("VolleyballMatchesProcessor") \
-    .config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.4.0,org.elasticsearch:elasticsearch-spark-30_2.12:8.7.1") \
-    .config("spark.es.nodes.wan.only", "true") \
+    .appName("VolleyballStreamProcessor") \
+    .config("spark.jars.packages", 
+            "org.apache.spark:spark-sql-kafka-0-10_2.12:3.3.0,"
+            "org.elasticsearch:elasticsearch-spark-30_2.12:8.7.1") \
     .getOrCreate()
 
-# 3. Lettura dei dati da Kafka
-kafka_stream = spark.readStream \
+# Schema per i dati in arrivo da Kafka (adattato alla tua API Volleyball)
+volleyball_schema = StructType([
+    StructField("id", IntegerType()),
+    StructField("name", StringType()),
+    StructField("tournament_id", IntegerType()),
+    StructField("home_team_id", IntegerType()),
+    StructField("away_team_id", IntegerType()),
+    StructField("home_team_name", StringType()),
+    StructField("away_team_name", StringType()),
+    StructField("home_team_score", MapType(StringType(), IntegerType())),
+    StructField("away_team_score", MapType(StringType(), IntegerType())),
+    StructField("status", MapType(StringType(), StringType())),
+    StructField("arena_name", StringType()),
+    StructField("start_time", StringType()),
+    StructField("duration", IntegerType()),
+    StructField("round", MapType(StringType(), StringType())),
+    StructField("coaches", MapType(StringType(), StringType()))
+])
+
+# Leggi da Kafka
+kafka_df = spark \
+    .readStream \
     .format("kafka") \
     .option("kafka.bootstrap.servers", "kafka-volley:9092") \
     .option("subscribe", "matchvolley") \
     .option("startingOffsets", "latest") \
     .load()
 
-# 4. Trasformazione dei dati
-processed_data = kafka_stream \
-    .select(from_json(col("value").cast("string"), match_schema).alias("data")) \
-    .select("data.*") \
-    .withColumn("event_time", from_unixtime(col("timestamp")).cast(TimestampType()))
+# Parsing dei dati JSON
+parsed_df = kafka_df.select(
+    from_json(col("value").cast("string"), volleyball_schema).alias("data")
+).select("data.*")
 
-# 5. Scrittura su Elasticsearch
-query = processed_data.writeStream \
-    .outputMode("append") \
+# Aggiungi campo timestamp di elaborazione
+processed_df = parsed_df.withColumn("processing_timestamp", current_timestamp())
+
+# Scrivi su Elasticsearch
+query = processed_df.writeStream \
     .format("org.elasticsearch.spark.sql") \
     .option("es.nodes", "elasticsearch-volley") \
     .option("es.port", "9200") \
     .option("es.resource", "volleyball_matches") \
-    .option("es.mapping.id", "match_id") \
-    .option("es.nodes.wan.only", "true") \
+    .option("es.mapping.id", "id") \
+    .option("es.write.operation", "upsert") \
     .option("checkpointLocation", "/tmp/checkpoint") \
+    .outputMode("append") \
     .start()
 
-# 6. Gestione dell'esecuzione
-try:
-    query.awaitTermination()
-except Exception as e:
-    print(f"Errore durante l'esecuzione: {str(e)}")
-    query.stop()
+query.awaitTermination()
