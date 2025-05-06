@@ -11,7 +11,7 @@ spark = SparkSession.builder \
             "org.elasticsearch:elasticsearch-spark-30_2.12:8.7.1") \
     .getOrCreate()
 
-# Schema per i dati in arrivo da Kafka (adattato alla tua API Volleyball)
+# Schema per i dati in arrivo da Kafka
 volleyball_schema = StructType([
     StructField("id", IntegerType()),
     StructField("name", StringType()),

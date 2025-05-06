@@ -40,7 +40,7 @@ while True:
             print("\n" + "="*60)
             print(" ⚠️  Nessuna partita in diretta al momento ".center(60))
             print("="*60 + "\n")
-            print("Aggiornamento automatico ogni 5 secondi...")
+            print("Aggiornamento automatico ogni 10 secondi...")
         else:
             print("\n" + "="*60)
             print(" 🏐 PARTITE IN DIRETTA LIVE ".center(60))
