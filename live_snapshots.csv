@@ -1,0 +1,4 @@
+match_id,timestamp,home_team_id,away_team_id,home_score_total,away_score_total,home_sets_won,away_sets_won,score_diff,set_diff,home_current_score,away_current_score,set_info,game_duration,match_status,home_win_rate_last15,away_win_rate_last15,head_to_head_win_rate_home
+206637,2025-05-13 13:11:06.750073,2164,370209,66,39,2,0,27,2,16,9,Set 1: 25-14 | Set 2: 25-16 | Set 3: 16-9,150m 0s,3rd set,0.8,0.6666666666666666,1.0
+206637,2025-05-13 13:13:52.767847,2164,370209,69,44,2,0,25,2,19,14,Set 1: 25-14 | Set 2: 25-16 | Set 3: 19-14,150m 0s,3rd set,0.8,0.6666666666666666,1.0
+206637,2025-05-13 13:16:47.079969,2164,370209,70,44,2,0,26,2,20,14,Set 1: 25-14 | Set 2: 25-16 | Set 3: 20-14,150m 0s,3rd set,0.8,0.6666666666666666,1.0
