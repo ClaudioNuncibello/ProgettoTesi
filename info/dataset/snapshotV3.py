@@ -18,10 +18,10 @@ CACHE_HEAD2HEAD = {}
 
 
 
-def get_team_last15_matches(team_id):
+def get_team_last5_matches(team_id):
     if team_id in CACHE_TEAM_MATCHES:
         return CACHE_TEAM_MATCHES[team_id]
-    url = f"https://volleyball.sportdevs.com/matches?or=(home_team_id.eq.{team_id},away_team_id.eq.{team_id})&order=specific_start_time.desc&limit=15"
+    url = f"https://volleyball.sportdevs.com/matches?or=(home_team_id.eq.{team_id},away_team_id.eq.{team_id})&order=specific_start_time.desc&limit=5"
     resp = requests.get(url, headers=headers)
     matches = resp.json()
     CACHE_TEAM_MATCHES[team_id] = matches
@@ -131,8 +131,8 @@ def collect_snapshot_data():
         secs = duration % 60
         game_duration = f"{mins}m {secs}s"
 
-        home_win_rate_last15 = compute_win_rate(get_team_last15_matches(home_id), home_id)
-        away_win_rate_last15 = compute_win_rate(get_team_last15_matches(away_id), away_id)
+        home_win_rate_last5 = compute_win_rate(get_team_last5_matches(home_id), home_id)
+        away_win_rate_last5 = compute_win_rate(get_team_last5_matches(away_id), away_id)
         head2head_matches = get_head_to_head_matches(home_id, away_id)
         head_to_head_win_rate_home = compute_head_to_head_win_rate(head2head_matches, home_id)
 
@@ -154,8 +154,8 @@ def collect_snapshot_data():
             "set_info": set_info,
             "game_duration": game_duration,
             "match_status": match_status,
-            "home_win_rate_last15": home_win_rate_last15,
-            "away_win_rate_last15": away_win_rate_last15,
+            "home_win_rate_last5": home_win_rate_last5,
+            "away_win_rate_last5": away_win_rate_last5,
             "head_to_head_win_rate_home": head_to_head_win_rate_home,
 
         }
