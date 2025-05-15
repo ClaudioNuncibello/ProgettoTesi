@@ -5,6 +5,8 @@ from datetime import datetime
 import pandas as pd
 from collections import defaultdict
 
+from dataset.target import OUT_PATH
+
 API_KEY = "AymenURP9kWkgEatcBdcYA"
 MATCHES_URL = "https://volleyball.sportdevs.com/matches?status_type=eq.live"
 
@@ -176,9 +178,8 @@ def print_live_matches(matches):
     else:
         print("🏐 Partite live in corso:")
         for m in matches:
-            home = m["home_team"]["name"]
-            away = m["away_team"]["name"]
-            print(f" • ID {m['id']}: {home} vs {away}")
+             
+            print(f" • ID {m['id']}: {m['name']}")
 
 if __name__ == "__main__":
     LAST_SCORES = {}  # match_id → (home_current_score, away_current_score)
@@ -203,13 +204,17 @@ if __name__ == "__main__":
                     LAST_SCORES[mid] = curr
 
             # 4) Scrivi su CSV se ci sono nuove righe
+            OUT_PATH = "/Users/claudio/Documents/GitHub/ProgettoTesi/dataset/live_snapshots.csv"
+            #mi assicuro che la cartella esiste
+            os.makedirs(os.path.dirname(OUT_PATH), exist_ok=True)
+            
             if to_write:
                 df = pd.DataFrame(to_write)
                 df.to_csv(
-                    "live_snapshots.csv",
+                    OUT_PATH,
                     mode='a',
                     index=False,
-                    header=not os.path.exists("live_snapshots.csv")
+                    header=not os.path.exists(OUT_PATH)
                 )
                 print(f"✅ Snapshot aggiornato alle {datetime.now():%H:%M:%S} con {len(df)} nuove righe")
             else:
@@ -221,4 +226,4 @@ if __name__ == "__main__":
             # break
 
         # Se arrivi qui, attendi il prossimo ciclo
-        time.sleep(10)
+        time.sleep(60)

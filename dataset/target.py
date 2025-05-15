@@ -11,8 +11,8 @@ HEADERS     = {
     'Authorization': f"Bearer {API_KEY}"
 }
 TIMEOUT     = 10  # secondi per la chiamata HTTP
-CSV_PATH    = '/Users/claudio/Documents/GitHub/ProgettoTesi/live_snapshots.csv'
-OUT_PATH    = '/Users/claudio/Documents/GitHub/ProgettoTesi/live_snapshots_target.csv'
+CSV_PATH    = '/Users/claudio/Documents/GitHub/ProgettoTesi/dataset/live_snapshots.csv'
+OUT_PATH    = '/Users/claudio/Documents/GitHub/ProgettoTesi/dataset/live_snapshots_target.csv'
 
 # --- 1) Leggi tutti gli snapshot ---
 df = pd.read_csv(CSV_PATH)
@@ -29,7 +29,8 @@ for mid in tqdm(df['match_id'].unique(), desc="Fetching match info"):
         resp = requests.get(url, headers=HEADERS, timeout=TIMEOUT)
         resp.raise_for_status()
         data = resp.json()
-
+        print(data)
+        
         if data:
             rec    = data[0]
             status = rec.get('status_type')
