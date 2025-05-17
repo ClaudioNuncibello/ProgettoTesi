@@ -204,7 +204,7 @@ if __name__ == "__main__":
                     LAST_SCORES[mid] = curr
 
             # 4) Scrivi su CSV se ci sono nuove righe
-            OUT_PATH = "/Users/claudio/Documents/GitHub/ProgettoTesi/dataset/live_snapshots.csv"
+            OUT_PATH = "/Users/claudio/Documents/GitHub/ProgettoTesi/scripts/live_snapshots.csv"
             #mi assicuro che la cartella esiste
             os.makedirs(os.path.dirname(OUT_PATH), exist_ok=True)
             
