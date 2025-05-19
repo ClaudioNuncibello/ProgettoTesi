@@ -95,6 +95,7 @@ services:
     container_name: "spark-volley"
     volumes:
       - ./spark/spark.py:/home/spark.py
+      - ./spark/checkpoint:/tmp/spark-es-checkpoint
     networks:
       - network
     depends_on:
