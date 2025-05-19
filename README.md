@@ -82,6 +82,7 @@ Da queste verranno estratte feature per:
 │   └── spark.py                # Codice Spark per analisi predittive (WIP)
 ├── frontend/                   # Web app React + Next.js
 ├── scripts/                    # Script Python per ingestione dati e API
+├── tests/                      # Test per Script Python Producer
 ├── esdata/                     # Volume dati per Elasticsearch
 └── README.md
 ```
