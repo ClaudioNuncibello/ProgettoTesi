@@ -98,7 +98,7 @@ Da queste verranno estratte feature per:
 | Logstash                    | ✅ Operativo    |
 | Elasticsearch               | ✅ Operativo    |
 | Kibana                      | ✅ Operativo    |
-| Spark                       | ⚠️ Integrato, in attesa di snapshot e modelli ML |
+| Spark                       | ⚠️ Integrato, in attesa di modelli ML |
 | Predizioni                  | ⚠️ In sviluppo   |
 | Integrazione API SportDevs  | ✅ Completata   |
 
