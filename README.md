@@ -82,6 +82,7 @@ Da queste verranno estratte feature per:
 │   └── spark.py                # Codice Spark per analisi predittive (WIP)
 ├── frontend/                   # Web app React + Next.js
 ├── scripts/                    # Script Python per ingestione dati e API
+├── tests/                      # Test per Script Python Producer
 ├── esdata/                     # Volume dati per Elasticsearch
 └── README.md
 ```
@@ -97,7 +98,7 @@ Da queste verranno estratte feature per:
 | Logstash                    | ✅ Operativo    |
 | Elasticsearch               | ✅ Operativo    |
 | Kibana                      | ✅ Operativo    |
-| Spark                       | ⚠️ Integrato, in attesa di snapshot e modelli ML |
+| Spark                       | ⚠️ Integrato, in attesa di modelli ML |
 | Predizioni                  | ⚠️ In sviluppo   |
 | Integrazione API SportDevs  | ✅ Completata   |
 
