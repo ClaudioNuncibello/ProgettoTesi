@@ -1,8 +1,17 @@
-import { Poppins } from "next/font/google"
+import { Inter, Montserrat } from "next/font/google"
 
-export const poppins = Poppins({
+// Font principale per i testi
+export const inter = Inter({
   subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700", "800"],
+  weight: ["400", "500", "600", "700"],
   display: "swap",
-  variable: "--font-poppins",
+  variable: "--font-inter",
+})
+
+// Font per titoli e elementi di enfasi
+export const montserrat = Montserrat({
+  subsets: ["latin"],
+  weight: ["500", "600", "700", "800"],
+  display: "swap",
+  variable: "--font-montserrat",
 })
