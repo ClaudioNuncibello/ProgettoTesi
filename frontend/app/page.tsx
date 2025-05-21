@@ -9,21 +9,21 @@ export default function Home() {
       icon: Camera,
       title: "Live Snapshot",
       description:
-        "Estraiamo in tempo reale lo stato della partita dalle Sport Devs API: ogni snapshot è una fotografia puntuale del match in corso.",
+        "Raccogliamo aggiornamenti regolari dalla Sport Devs API (10 s) ottenendo un JSON dello stato di ogni match (snapshoat live) ; ogni snapshoat  viene serializzato e pushato su un topic Kafka dedicato, garantendo tracciabilità storica e facilità di replay per analisi retrospettive.",
     },
     {
       id: 2,
       icon: Database,
-      title: "Streaming & Processing",
+      title: "Streaming & Analisi",
       description:
-        "I dati grezzi viaggiano su Kafka, vengono trasformati da Logstash e infine elaborati da Spark con modelli di predizione per la vittoria.",
+        "Consumiamo i dati grezzi dal topic Kafka dedicato, li trasformiamo con Logstash in eventi JSON standardizzati e li inviamo a Spark Streaming; qui vengono applicati modelli di machine learning che calcolano in tempo reale probabilità di vittoria e metriche chiave, poi pubblicati su un topic di output pronti per la dashboard.",
     },
     {
       id: 3,
       icon: Server,
-      title: "Indexing & Deployment",
+      title: "Deployment & Indicizzazione",
       description:
-        "Tutto il processo gira in container Docker e i risultati vengono indicizzati in Elasticsearch per ricerche veloci e visualizzazioni su dashboard.",
+        "L’intera pipeline è containerizzata con Docker per garantire deployment rapido e scalabilità automatica; gli snapshoat vengono indicizzati in Elasticsearch, assicurando ricerche veloci e dashboard interattive sempre aggiornate.",
     },
   ]
 
@@ -36,13 +36,13 @@ export default function Home() {
             VolleyApi
           </Link>
           <div className="flex space-x-6">
-            <Link href="/" className="nav-link">
+            <Link href="/" className="nav-link active">
               Home
             </Link>
             <Link href="https://github.com/ClaudioNuncibello/ProgettoTesi" className="nav-link">
               GitHub
             </Link>
-            <Link href="/dashboard" className="nav-link active">
+            <Link href="/dashboard" className="nav-link">
               Dashboard
             </Link>
           </div>
@@ -53,17 +53,17 @@ export default function Home() {
         <div className="container mx-auto px-4 py-6 flex flex-col h-full">
           <header className="mb-8 text-center">
             <h1 className="mb-4 text-4xl md:text-5xl font-bold text-foreground bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary">
-              Follow Your Matches
+              Segui i tuoi match in tempo reale
             </h1>
             <p className="mx-auto max-w-2xl text-muted-foreground mb-6">
-              Follow your favorite matches: tap the star to save them and see live stats on your dashboard.
+              Salva i tuoi incontri preferiti e scopri statistiche live e previsioni direttamente sulla tua dashboard.
             </p>
             <Link
               href="https://github.com/ClaudioNuncibello/ProgettoTesi"
               className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2.5 rounded-md text-sm font-medium hover:bg-primary/90 transition-colors shadow-sm"
             >
               <Github size={18} />
-              View code on GitHub
+              Guarda il codice su GitHub
             </Link>
           </header>
 
