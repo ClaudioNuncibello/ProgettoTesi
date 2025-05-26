@@ -19,6 +19,7 @@ L'intero sistema è containerizzato tramite Docker Compose, con una rete isolata
 - **Elasticsearch** per l'indicizzazione e lo storage strutturato
 - **Kibana** per la visualizzazione grafica dei dati in tempo reale
 - **Spark** è predisposto per futuri sviluppi di Machine Learning sui dati snapshot, ma **attualmente non è ancora operativo**
+- **Backend** Un servizio HTTP che si interfaccia con il cluster Elasticsearch per fornire ricerche per match id
 
 ---
 
@@ -76,11 +77,13 @@ Da queste verranno estratte feature per:
 ```
 .
 ├── docker-compose.yml          # File principale per il setup dei container
+├── mapping.json                # File di mapping per l'indice di elastic
 ├── logstash/
 │   └── logstash.conf           # Configurazione Logstash per la pipeline dati
 ├── spark/
 │   └── spark.py                # Codice Spark per analisi predittive (WIP)
 ├── frontend/                   # Web app React + Next.js
+├── backtend/                   # Personal API di ricerca basata su Elasticsearch
 ├── scripts/                    # Script Python per ingestione dati e API
 ├── tests/                      # Test per Script Python Producer
 ├── esdata/                     # Volume dati per Elasticsearch
