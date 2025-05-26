@@ -1,0 +1,24 @@
+{
+  "mappings": {
+    "properties": {
+      "match_id":                   { "type": "integer" },
+      "timestamp":                  { "type": "date",    "format": "yyyy-MM-dd HH:mm:ss.SSSSSS" },
+      "home_team_id":               { "type": "integer" },
+      "away_team_id":               { "type": "integer" },
+      "home_score_total":           { "type": "integer" },
+      "away_score_total":           { "type": "integer" },
+      "home_sets_won":              { "type": "integer" },
+      "away_sets_won":              { "type": "integer" },
+      "score_diff":                 { "type": "integer" },
+      "set_diff":                   { "type": "integer" },
+      "home_current_score":         { "type": "keyword" },
+      "away_current_score":         { "type": "keyword" },
+      "set_info":                   { "type": "keyword" },
+      "game_duration":              { "type": "keyword" },
+      "match_status":               { "type": "keyword" },
+      "home_win_rate_last5":        { "type": "float" },
+      "away_win_rate_last5":        { "type": "float" },
+      "head_to_head_win_rate_home": { "type": "float" }
+    }
+  }
+}

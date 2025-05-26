@@ -100,6 +100,18 @@ services:
       - network
     depends_on:
       - elasticsearch-volley
+    
+  # Backend
+  backend-volley:
+    build: ./backend
+    container_name: backend-volley
+    depends_on:
+      - elasticsearch-volley
+    ports:
+      - "8000:8000"
+    networks:
+      - network
+
 
 networks:
   network:

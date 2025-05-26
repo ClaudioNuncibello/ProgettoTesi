@@ -23,7 +23,8 @@ print(f"🔁 Invio {len(df)} record da {CSV_PATH} a Kafka…")
 for _, row in df.iterrows():
     # Converto la riga in dizionario; assicuro timestamp ISO8601
     record = row.to_dict()
-    record["timestamp"] = row["timestamp"].isoformat()
+    #record["timestamp"] = row["timestamp"].isoformat()
+    record["timestamp"] = row["timestamp"].isoformat(sep=" ")
     
     # Invio
     producer.send(TOPIC_NAME, value=record).add_callback(
