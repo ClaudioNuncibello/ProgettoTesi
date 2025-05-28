@@ -94,8 +94,14 @@ services:
     build: ./spark/
     container_name: "spark-volley"
     volumes:
+      # script spark.py
       - ./spark/spark.py:/home/spark.py
-      - ./spark/checkpoint:/tmp/spark-es-checkpoint
+      # contiene live_snapshots_target.csv per il batch-training
+      - ./spark/data:/data
+      # qui spark_train.py scriverà il pipeline model serializzato
+      - ./spark/models:/data/models
+      # il checkpoint per Elasticsearch streaming
+      - ./spark/checkpoint:/tmp/spark-es-checkpoint  
     networks:
       - network
     depends_on:

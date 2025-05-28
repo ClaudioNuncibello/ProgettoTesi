@@ -18,7 +18,9 @@
       "match_status":               { "type": "keyword" },
       "home_win_rate_last5":        { "type": "float" },
       "away_win_rate_last5":        { "type": "float" },
-      "head_to_head_win_rate_home": { "type": "float" }
+      "head_to_head_win_rate_home": { "type": "float" },
+      "predicted_win":              { "type": "float" }
+
     }
   }
 }
