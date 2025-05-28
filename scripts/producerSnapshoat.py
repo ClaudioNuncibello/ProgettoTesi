@@ -224,17 +224,12 @@ if __name__ == "__main__":
                         to_write.append(snap)
                         LAST_SCORES[mid] = curr
 
-                OUT_PATH = "/Users/claudio/.../live_snapshots.csv"
+                OUT_PATH = "/Users/claudio/Documents/GitHub/ProgettoTesi/scripts/live_snapshots.csv"
                 os.makedirs(os.path.dirname(OUT_PATH), exist_ok=True)
                 
                 if to_write:
                     df = pd.DataFrame(to_write)
-                    df.to_csv(
-                        OUT_PATH,
-                        mode='a',
-                        index=False,
-                        header=not os.path.exists(OUT_PATH)
-                    )
+                    df.to_csv(OUT_PATH, mode='a', index=False, header=not os.path.exists(OUT_PATH))
                     print(f"✅ Snapshot aggiornato alle {datetime.now():%H:%M:%S} con {len(df)} nuove righe")
                     send_to_kafka(producer, to_write)
                 else:
