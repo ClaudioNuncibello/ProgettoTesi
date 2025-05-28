@@ -82,6 +82,8 @@ Da queste verranno estratte feature per:
 │   └── logstash.conf           # Configurazione Logstash per la pipeline dati
 ├── spark/
 │   └── spark.py                # Codice Spark per analisi predittive (WIP)
+│   └── data/                   # Contiene live_snapshots_target.csv per il batch-training e pipeline model serializzato
+│   └── checkpoint/             # Contiene checkpoint per Elasticsearch streaming
 ├── frontend/                   # Web app React + Next.js
 ├── backtend/                   # Personal API di ricerca basata su Elasticsearch
 ├── scripts/                    # Script Python per ingestione dati e API
@@ -96,7 +98,7 @@ Da queste verranno estratte feature per:
 
 | Componente                  | Stato           |
 |-----------------------------|---------------- |
-| Web App React               | ⚠️ In sviluppo   |
+| Web App React               | ⚠️ Integrata, in attesa di integrazione backend (gia sviluppato)   |
 | Kafka                       | ✅ Operativo    |
 | Logstash                    | ✅ Operativo    |
 | Elasticsearch               | ✅ Operativo    |
