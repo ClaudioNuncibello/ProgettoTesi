@@ -40,77 +40,10 @@ interface DetailedMatch {
 
 // --- Dati di fallback per la colonna di sinistra ---
 const testSportDevMatches: SportDevMatch[] = [
-  { id: 1, name: "Italy vs France", start_time: "2025-06-03T15:30:00Z" },
+  { id: 206637, name: "Italy vs France", start_time: "2025-06-03T15:30:00Z" },
   { id: 2, name: "Brazil vs Argentina", start_time: "2025-06-03T16:00:00Z" },
   { id: 3, name: "USA vs Poland", start_time: "2025-06-03T16:30:00Z" },
 ]
-
-// --- Dati di fallback per la colonna di destra ---
-const testDetailedMatches: Record<number, DetailedMatch> = {
-  1: {
-    match_id: 1,
-    timestamp: "2025-05-13 13:16:47.079969",
-    home_team_id: 2164,
-    away_team_id: 370209,
-    home_score_total: 70,
-    away_score_total: 44,
-    home_sets_won: 2,
-    away_sets_won: 0,
-    score_diff: 26,
-    set_diff: 2,
-    home_current_score: "20",
-    away_current_score: "14",
-    set_info: "Set 1: 25-14 | Set 2: 25-16 | Set 3: 20-14",
-    game_duration: "150m 0s",
-    match_status: "3rd set",
-    home_win_rate_last5: 0.8,
-    away_win_rate_last5: 0.6666666666666666,
-    head_to_head_win_rate_home: 1.0,
-    predicted_win: 0.65,
-  },
-  2: {
-    match_id: 2,
-    timestamp: "2025-05-14 20:57:28.290246",
-    home_team_id: 44350,
-    away_team_id: 44433,
-    home_score_total: 91,
-    away_score_total: 93,
-    home_sets_won: 2,
-    away_sets_won: 2,
-    score_diff: -2,
-    set_diff: 0,
-    home_current_score: "22",
-    away_current_score: "25",
-    set_info: "Set 1: 25-22 | Set 2: 19-25 | Set 3: 25-21 | Set 4: 22-25",
-    game_duration: "150m 0s",
-    match_status: "4th set",
-    home_win_rate_last5: 0.6,
-    away_win_rate_last5: 0.4,
-    head_to_head_win_rate_home: 0.45,
-    predicted_win: 0.45,
-  },
-  3: {
-    match_id: 3,
-    timestamp: "2025-05-14 20:57:28.290386",
-    home_team_id: 44300,
-    away_team_id: 44561,
-    home_score_total: 94,
-    away_score_total: 90,
-    home_sets_won: 1,
-    away_sets_won: 2,
-    score_diff: 4,
-    set_diff: -1,
-    home_current_score: "22",
-    away_current_score: "16",
-    set_info: "Set 1: 23-25 | Set 2: 23-25 | Set 3: 26-24 | Set 4: 22-16",
-    game_duration: "150m 0s",
-    match_status: "4th set",
-    home_win_rate_last5: 0.5,
-    away_win_rate_last5: 0.2,
-    head_to_head_win_rate_home: 0.25,
-    predicted_win: 0.25,
-  },
-}
 
 export default function Dashboard() {
   // Stato per la colonna di sinistra
@@ -166,20 +99,8 @@ export default function Dashboard() {
   const fetchMatches = fetchMatchesDev
   // const fetchMatches = fetchMatchesProd
 
-  // --- Fetch fallback per i dettagli (colonna di destra) ---
-  async function fetchMatchDetailsDev(matchId: number) {
-    await new Promise((r) => setTimeout(r, 300))
-    const demo = testDetailedMatches[matchId]
-    if (demo) {
-      setDetailedMatches((prev) => ({
-        ...prev,
-        [matchId]: demo,
-      }))
-    }
-  }
-
   // --- Fetch “Prod” per i dettagli (colonna di destra) ---
-  async function fetchMatchDetailsProd(matchId: number) {
+  async function fetchMatchDetails(matchId: number) {
     try {
       const res = await fetch(DETAIL_URL(matchId))
       if (!res.ok) throw new Error(`Status ${res.status}`)
@@ -189,25 +110,23 @@ export default function Dashboard() {
         [matchId]: data,
       }))
     } catch (err) {
-      console.error(`Errore fetch dettagli match ${matchId}:`, err)
-      // fallback automatico
-      const demo = testDetailedMatches[matchId]
-      if (demo) {
-        setDetailedMatches((prev) => ({
-          ...prev,
-          [matchId]: demo,
-        }))
-      }
+      
     }
   }
-
-  // ==== SCEGLI QUALE USARE per la colonna di destra ====
-  const fetchMatchDetails = fetchMatchDetailsDev
-  // const fetchMatchDetails = fetchMatchDetailsProd
 
   useEffect(() => {
     fetchMatches()
   }, [])
+
+  useEffect(() => {
+    const intervall = setInterval(()=> {
+      Object.keys(detailedMatches).map(key=>{
+        fetchMatchDetails(key)
+        //console.log(detailedMatches[key])
+      })
+    }, 10000)
+    return ()=>clearInterval(intervall)
+  }, [detailedMatches])
 
   // Formatta data/ora in italiano
   const formatMatchDate = (dateString?: string) =>
