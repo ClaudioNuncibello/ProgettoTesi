@@ -19,13 +19,13 @@
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
 
-    --primary: 221 83% 53%;
+    --primary: 24 74% 58%; /* Arancione vibrante */
     --primary-foreground: 210 40% 98%;
 
-    --secondary: 199 89% 48%;
+    --secondary: 262 83% 58%; /* Viola */
     --secondary-foreground: 210 40% 98%;
 
-    --accent: 199 89% 48%;
+    --accent: 330 81% 60%; /* Rosa */
     --accent-foreground: 210 40% 98%;
 
     --muted: 210 40% 96.1%;
@@ -36,21 +36,21 @@
 
     --border: 214 32% 91%;
     --input: 214 32% 91%;
-    --ring: 221 83% 53%;
+    --ring: 24 74% 58%;
 
     --radius: 0.5rem;
 
-    /* Colori specifici per il volley */
-    --volleyball-blue: 221 83% 53%;
-    --volleyball-cyan: 199 89% 48%;
-    --volleyball-orange: 21 90% 48%;
+    /* Colori specifici per il volley - Sunset Gradient Theme */
+    --volleyball-blue: 262 83% 58%; /* Viola */
+    --volleyball-cyan: 330 81% 60%; /* Rosa */
+    --volleyball-orange: 45 93% 58%; /* Giallo-arancione */
     --volleyball-red: 0 84% 60%;
 
     /* Colori per i grafici */
-    --chart-1: 221 83% 53%;
-    --chart-2: 199 89% 48%;
-    --chart-3: 21 90% 48%;
-    --chart-4: 262 83% 58%;
+    --chart-1: 24 74% 58%;
+    --chart-2: 262 83% 58%;
+    --chart-3: 330 81% 60%;
+    --chart-4: 45 93% 58%;
     --chart-5: 340 82% 52%;
   }
 
@@ -64,13 +64,13 @@
     --popover: 222 47% 11%;
     --popover-foreground: 210 40% 98%;
 
-    --primary: 217 91% 60%;
+    --primary: 24 74% 58%;
     --primary-foreground: 222 47% 11%;
 
-    --secondary: 199 89% 48%;
+    --secondary: 262 83% 58%;
     --secondary-foreground: 222 47% 11%;
 
-    --accent: 199 89% 48%;
+    --accent: 330 81% 60%;
     --accent-foreground: 222 47% 11%;
 
     --muted: 217 33% 17%;
@@ -81,7 +81,7 @@
 
     --border: 217 33% 17%;
     --input: 217 33% 17%;
-    --ring: 224 76% 48%;
+    --ring: 24 74% 58%;
   }
 }
 
@@ -135,4 +135,22 @@
 
 .nav-link.active::after {
   @apply w-full;
+}
+
+/* Animazione per i match preferiti */
+@keyframes favorite-added {
+  0% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-15px);
+  }
+  100% {
+    transform: translateY(0);
+    background-color: rgba(var(--primary), 0.05);
+  }
+}
+
+.animate-favorite-added {
+  animation: favorite-added 0.4s ease-out;
 }

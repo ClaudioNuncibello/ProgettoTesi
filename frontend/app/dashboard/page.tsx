@@ -1,477 +1,144 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import { Star, RefreshCw } from "lucide-react"
 
 const API_KEY = "AymenURP9kWkgEatcBdcYA"
 const MATCHES_URL = "https://volleyball.sportdevs.com/matches?season_id=eq.17700"
+const DETAIL_URL = (matchId: number) => `http://localhost:8000/match/${matchId}`
 
-// --- Tipi ---
-interface MatchScore {
-  current: number
-  display: number
-  period_1?: number
-  period_2?: number
-  period_3?: number
-  period_4?: number
-  period_5?: number
-  penalties?: number
-  default_time?: number
-}
-
-interface MatchStatus {
-  type: string
-  reason?: string
-}
-
-interface RawMatch {
+// --- Tipo per i soli match SportDevs (colonna di sinistra) ---
+interface SportDevMatch {
   id: number
   name: string
-  tournament_name?: string
-  status: MatchStatus
-  status_type: string
-  home_team_name: string
-  away_team_name: string
-  home_team_hash_image?: string
-  away_team_hash_image?: string
-  home_team_score: MatchScore
-  away_team_score: MatchScore
   start_time: string
-  specific_start_time?: string
-  times?: { specific_start_time: string }
 }
 
-interface Match {
-  id: number
-  name: string
-  tournament_name: string
-  status: MatchStatus
-  status_type: string
-  home_team_name: string
-  away_team_name: string
-  home_team_hash_image?: string
-  away_team_hash_image?: string
-  home_team_score: MatchScore
-  away_team_score: MatchScore
-  start_time: string
-  specific_start_time?: string
-  isLive: boolean
+// --- Unica interfaccia per i dettagli (colonna di destra) ---
+interface DetailedMatch {
+  match_id: number
+  timestamp: string
+  home_team_id: number
+  away_team_id: number
+  home_score_total: number
+  away_score_total: number
+  home_sets_won: number
+  away_sets_won: number
+  score_diff: number
+  set_diff: number
+  home_current_score: string
+  away_current_score: string
+  set_info: string
+  game_duration: string
+  match_status: string
+  home_win_rate_last5: number
+  away_win_rate_last5: number
+  head_to_head_win_rate_home: number
+  predicted_win: number
 }
 
-// Dati di fallback migliorati
-// Tutte le partite sono "inprogress" con punteggi live coerenti
-const fallbackMatches: Match[] = [
-  {
-    id: 1,
-    name: "Italy vs France",
-    tournament_name: "European Championship",
-    status: { type: "inprogress" },
-    status_type: "inprogress",
-    home_team_name: "Italy",
-    away_team_name: "France",
-    home_team_score: {
-      current: 2,
-      display: 2,
-      period_1: 25,
-      period_2: 23,
-      period_3: 25,
-      period_4: 8,
-    },
-    away_team_score: {
-      current: 1,
-      display: 1,
-      period_1: 20,
-      period_2: 25,
-      period_3: 22,
-      period_4: 6,
-    },
-    start_time: new Date().toISOString(),
-    isLive: true,
-  },
-  {
-    id: 2,
-    name: "Brazil vs Argentina",
-    tournament_name: "South American Championship",
-    status: { type: "inprogress" },
-    status_type: "inprogress",
-    home_team_name: "Brazil",
-    away_team_name: "Argentina",
-    home_team_score: {
-      current: 1,
-      display: 1,
-      period_1: 18,
-      period_2: 25,
-      period_3: 10,
-    },
-    away_team_score: {
-      current: 1,
-      display: 1,
-      period_1: 25,
-      period_2: 20,
-      period_3: 8,
-    },
-    start_time: new Date().toISOString(),
-    isLive: true,
-  },
-  {
-    id: 3,
-    name: "USA vs Poland",
-    tournament_name: "World Championship",
-    status: { type: "inprogress" },
-    status_type: "inprogress",
-    home_team_name: "USA",
-    away_team_name: "Poland",
-    home_team_score: {
-      current: 2,
-      display: 2,
-      period_1: 20,
-      period_2: 25,
-      period_3: 22,
-    },
-    away_team_score: {
-      current: 1,
-      display: 1,
-      period_1: 25,
-      period_2: 18,
-      period_3: 25,
-    },
-    start_time: new Date(Date.now() - 86400000).toISOString(),
-    isLive: true,
-  },
-  {
-    id: 4,
-    name: "Serbia vs Germany",
-    tournament_name: "European Championship",
-    status: { type: "inprogress" },
-    status_type: "inprogress",
-    home_team_name: "Serbia",
-    away_team_name: "Germany",
-    home_team_score: {
-      current: 1,
-      display: 1,
-      period_1: 25,
-    },
-    away_team_score: {
-      current: 0,
-      display: 0,
-      period_1: 15,
-    },
-    start_time: new Date(Date.now() - 172800000).toISOString(),
-    isLive: true,
-  },
-  {
-    id: 5,
-    name: "Japan vs Slovenia",
-    tournament_name: "Friendly Match",
-    status: { type: "inprogress" },
-    status_type: "inprogress",
-    home_team_name: "Japan",
-    away_team_name: "Slovenia",
-    home_team_score: {
-      current: 0,
-      display: 0,
-      period_1: 5,
-    },
-    away_team_score: {
-      current: 0,
-      display: 0,
-      period_1: 3,
-    },
-    start_time: new Date(Date.now() + 86400000).toISOString(),
-    isLive: true,
-  },
-  {
-    id: 6,
-    name: "Canada vs Cuba",
-    tournament_name: "North American Championship",
-    status: { type: "inprogress" },
-    status_type: "inprogress",
-    home_team_name: "Canada",
-    away_team_name: "Cuba",
-    home_team_score: {
-      current: 1,
-      display: 1,
-      period_1: 22,
-    },
-    away_team_score: {
-      current: 0,
-      display: 0,
-      period_1: 20,
-    },
-    start_time: new Date(Date.now() + 172800000).toISOString(),
-    isLive: true,
-  },
-  {
-    id: 7,
-    name: "Russia vs China",
-    tournament_name: "World Championship",
-    status: { type: "inprogress" },
-    status_type: "inprogress",
-    home_team_name: "Russia",
-    away_team_name: "China",
-    home_team_score: {
-      current: 1,
-      display: 1,
-      period_1: 19,
-      period_2: 25,
-    },
-    away_team_score: {
-      current: 1,
-      display: 1,
-      period_1: 25,
-      period_2: 23,
-    },
-    start_time: new Date(Date.now() + 259200000).toISOString(),
-    isLive: true,
-  },
-  {
-    id: 8,
-    name: "Netherlands vs Belgium",
-    tournament_name: "European Championship",
-    status: { type: "inprogress" },
-    status_type: "inprogress",
-    home_team_name: "Netherlands",
-    away_team_name: "Belgium",
-    home_team_score: {
-      current: 2,
-      display: 2,
-      period_1: 25,
-      period_2: 27,
-      period_3: 25,
-    },
-    away_team_score: {
-      current: 0,
-      display: 0,
-      period_1: 23,
-      period_2: 29,
-      period_3: 21,
-    },
-    start_time: new Date(Date.now() + 345600000).toISOString(),
-    isLive: true,
-  },
-  {
-    id: 9,
-    name: "Italy vs Germany",
-    tournament_name: "World League",
-    status: { type: "inprogress" },
-    status_type: "inprogress",
-    home_team_name: "Italy",
-    away_team_name: "Germany",
-    home_team_score: {
-      current: 2,
-      display: 2,
-      period_1: 25,
-      period_2: 18,
-      period_3: 23,
-    },
-    away_team_score: {
-      current: 1,
-      display: 1,
-      period_1: 21,
-      period_2: 25,
-      period_3: 25,
-    },
-    start_time: new Date().toISOString(),
-    isLive: true,
-  },
-  {
-    id: 10,
-    name: "USA vs Brazil",
-    tournament_name: "World League",
-    status: { type: "inprogress" },
-    status_type: "inprogress",
-    home_team_name: "USA",
-    away_team_name: "Brazil",
-    home_team_score: {
-      current: 1,
-      display: 1,
-      period_1: 20,
-      period_2: 25,
-    },
-    away_team_score: {
-      current: 1,
-      display: 1,
-      period_1: 25,
-      period_2: 23,
-    },
-    start_time: new Date().toISOString(),
-    isLive: true,
-  },
-  {
-    id: 11,
-    name: "Argentina vs Poland",
-    tournament_name: "Pan American Cup",
-    status: { type: "inprogress" },
-    status_type: "inprogress",
-    home_team_name: "Argentina",
-    away_team_name: "Poland",
-    home_team_score: {
-      current: 2,
-      display: 2,
-      period_1: 25,
-      period_2: 22,
-      period_3: 25,
-    },
-    away_team_score: {
-      current: 1,
-      display: 1,
-      period_1: 20,
-      period_2: 25,
-      period_3: 23,
-    },
-    start_time: new Date(Date.now() - 432000000).toISOString(),
-    isLive: true,
-  },
-  {
-    id: 12,
-    name: "France vs Russia",
-    tournament_name: "European Championship",
-    status: { type: "inprogress" },
-    status_type: "inprogress",
-    home_team_name: "France",
-    away_team_name: "Russia",
-    home_team_score: {
-      current: 1,
-      display: 1,
-      period_1: 23,
-      period_2: 21,
-    },
-    away_team_score: {
-      current: 1,
-      display: 1,
-      period_1: 25,
-      period_2: 25,
-    },
-    start_time: new Date(Date.now() - 259200000).toISOString(),
-    isLive: true,
-  },
-  {
-    id: 13,
-    name: "Korea vs Thailand",
-    tournament_name: "Asian Championship",
-    status: { type: "inprogress" },
-    status_type: "inprogress",
-    home_team_name: "Korea",
-    away_team_name: "Thailand",
-    home_team_score: {
-      current: 0,
-      display: 0,
-      period_1: 8,
-    },
-    away_team_score: {
-      current: 0,
-      display: 0,
-      period_1: 10,
-    },
-    start_time: new Date(Date.now() + 432000000).toISOString(),
-    isLive: true,
-  },
-  {
-    id: 14,
-    name: "Tunisia vs Egypt",
-    tournament_name: "African Championship",
-    status: { type: "inprogress" },
-    status_type: "inprogress",
-    home_team_name: "Tunisia",
-    away_team_name: "Egypt",
-    home_team_score: {
-      current: 1,
-      display: 1,
-      period_1: 25,
-    },
-    away_team_score: {
-      current: 0,
-      display: 0,
-      period_1: 22,
-    },
-    start_time: new Date(Date.now() + 518400000).toISOString(),
-    isLive: true,
-  },
-  {
-    id: 15,
-    name: "Mexico vs Cuba",
-    tournament_name: "NORCECA Championship",
-    status: { type: "inprogress" },
-    status_type: "inprogress",
-    home_team_name: "Mexico",
-    away_team_name: "Cuba",
-    home_team_score: {
-      current: 1,
-      display: 1,
-      period_1: 18,
-      period_2: 21,
-    },
-    away_team_score: {
-      current: 1,
-      display: 1,
-      period_1: 25,
-      period_2: 23,
-    },
-    start_time: new Date(Date.now() + 604800000).toISOString(),
-    isLive: true,
-  },
-  {
-    id: 16,
-    name: "Belgium vs Spain",
-    tournament_name: "European League",
-    status: { type: "inprogress" },
-    status_type: "inprogress",
-    home_team_name: "Belgium",
-    away_team_name: "Spain",
-    home_team_score: {
-      current: 2,
-      display: 2,
-      period_1: 25,
-      period_2: 27,
-      period_3: 25,
-    },
-    away_team_score: {
-      current: 1,
-      display: 1,
-      period_1: 23,
-      period_2: 29,
-      period_3: 21,
-    },
-    start_time: new Date(Date.now() + 691200000).toISOString(),
-    isLive: true,
-  },
+// --- Dati di fallback per la colonna di sinistra ---
+const testSportDevMatches: SportDevMatch[] = [
+  { id: 1, name: "Italy vs France", start_time: "2025-06-03T15:30:00Z" },
+  { id: 2, name: "Brazil vs Argentina", start_time: "2025-06-03T16:00:00Z" },
+  { id: 3, name: "USA vs Poland", start_time: "2025-06-03T16:30:00Z" },
 ]
 
-function formatSetScores(home: MatchScore, away: MatchScore): string {
-  const parts: string[] = []
-  for (let i = 1; i <= 5; i++) {
-    const h = (home as any)[`period_${i}`]
-    const a = (away as any)[`period_${i}`]
-    if (h != null || a != null) {
-      parts.push(`Set ${i}: ${h ?? "?"}-${a ?? "?"}`)
-    }
-  }
-  return parts.join(" | ")
+// --- Dati di fallback per la colonna di destra ---
+const testDetailedMatches: Record<number, DetailedMatch> = {
+  1: {
+    match_id: 1,
+    timestamp: "2025-05-13 13:16:47.079969",
+    home_team_id: 2164,
+    away_team_id: 370209,
+    home_score_total: 70,
+    away_score_total: 44,
+    home_sets_won: 2,
+    away_sets_won: 0,
+    score_diff: 26,
+    set_diff: 2,
+    home_current_score: "20",
+    away_current_score: "14",
+    set_info: "Set 1: 25-14 | Set 2: 25-16 | Set 3: 20-14",
+    game_duration: "150m 0s",
+    match_status: "3rd set",
+    home_win_rate_last5: 0.8,
+    away_win_rate_last5: 0.6666666666666666,
+    head_to_head_win_rate_home: 1.0,
+    predicted_win: 0.65,
+  },
+  2: {
+    match_id: 2,
+    timestamp: "2025-05-14 20:57:28.290246",
+    home_team_id: 44350,
+    away_team_id: 44433,
+    home_score_total: 91,
+    away_score_total: 93,
+    home_sets_won: 2,
+    away_sets_won: 2,
+    score_diff: -2,
+    set_diff: 0,
+    home_current_score: "22",
+    away_current_score: "25",
+    set_info: "Set 1: 25-22 | Set 2: 19-25 | Set 3: 25-21 | Set 4: 22-25",
+    game_duration: "150m 0s",
+    match_status: "4th set",
+    home_win_rate_last5: 0.6,
+    away_win_rate_last5: 0.4,
+    head_to_head_win_rate_home: 0.45,
+    predicted_win: 0.45,
+  },
+  3: {
+    match_id: 3,
+    timestamp: "2025-05-14 20:57:28.290386",
+    home_team_id: 44300,
+    away_team_id: 44561,
+    home_score_total: 94,
+    away_score_total: 90,
+    home_sets_won: 1,
+    away_sets_won: 2,
+    score_diff: 4,
+    set_diff: -1,
+    home_current_score: "22",
+    away_current_score: "16",
+    set_info: "Set 1: 23-25 | Set 2: 23-25 | Set 3: 26-24 | Set 4: 22-16",
+    game_duration: "150m 0s",
+    match_status: "4th set",
+    home_win_rate_last5: 0.5,
+    away_win_rate_last5: 0.2,
+    head_to_head_win_rate_home: 0.25,
+    predicted_win: 0.25,
+  },
 }
 
 export default function Dashboard() {
-  const [matches, setMatches] = useState<Match[]>([])
+  // Stato per la colonna di sinistra
+  const [matches, setMatches] = useState<SportDevMatch[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [favoriteMatches, setFavoriteMatches] = useState<number[]>([])
 
-  // === Dev: usa sempre i fallback ===
+  // Stato per la colonna di destra
+  const [favoriteMatches, setFavoriteMatches] = useState<number[]>([])
+  const [animatingMatch, setAnimatingMatch] = useState<number | null>(null)
+  const [detailedMatches, setDetailedMatches] = useState<Record<number, DetailedMatch>>({})
+  const scrollRef = useRef<HTMLDivElement>(null)
+
+  // --- Fetch fallback per la lista SportDevs (colonna sinistra) ---
   async function fetchMatchesDev() {
     setError(null)
     setLoading(true)
     try {
-      await new Promise((r) => setTimeout(r, 1000))
-      setMatches(fallbackMatches)
-    } catch (err) {
-      console.error("fetchMatchesDev errore:", err)
-      setMatches(fallbackMatches)
+      await new Promise((r) => setTimeout(r, 500))
+      setMatches(testSportDevMatches)
+    } catch {
+      setMatches(testSportDevMatches)
     } finally {
       setLoading(false)
     }
   }
 
-  // === Prod: chiama l'API vera e, in caso di errore, mostra l'errore in UI ===
+  // --- Fetch “Prod” per la lista SportDevs (colonna sinistra) ---
   async function fetchMatchesProd() {
     setError(null)
     setLoading(true)
@@ -480,28 +147,69 @@ export default function Dashboard() {
         headers: { Authorization: `Bearer ${API_KEY}` },
       })
       if (!res.ok) throw new Error(`Status ${res.status}`)
-      const data: RawMatch[] = await res.json()
-      const parsed: Match[] = data.map((m) => ({
-        ...m,
-        isLive: m.status_type === "inprogress",
-        tournament_name: m.tournament_name ?? "–",
+      const data: any[] = await res.json()
+      const minimal: SportDevMatch[] = data.map((m) => ({
+        id: m.id,
+        name: m.name,
+        start_time: m.start_time,
       }))
-      setMatches(parsed)
+      setMatches(minimal)
     } catch (err) {
-      setError("Errore nella richiesta API")
+      console.error("Errore fetch SportDevs:", err)
+      setError("Errore nella richiesta API SportDevs")
     } finally {
       setLoading(false)
     }
   }
 
-  // ==== SCEGLI QUALE USARE ====
+  // ==== SCEGLI QUALE USARE per la colonna sinistra ====
   const fetchMatches = fetchMatchesDev
   // const fetchMatches = fetchMatchesProd
+
+  // --- Fetch fallback per i dettagli (colonna di destra) ---
+  async function fetchMatchDetailsDev(matchId: number) {
+    await new Promise((r) => setTimeout(r, 300))
+    const demo = testDetailedMatches[matchId]
+    if (demo) {
+      setDetailedMatches((prev) => ({
+        ...prev,
+        [matchId]: demo,
+      }))
+    }
+  }
+
+  // --- Fetch “Prod” per i dettagli (colonna di destra) ---
+  async function fetchMatchDetailsProd(matchId: number) {
+    try {
+      const res = await fetch(DETAIL_URL(matchId))
+      if (!res.ok) throw new Error(`Status ${res.status}`)
+      const data: DetailedMatch = await res.json()
+      setDetailedMatches((prev) => ({
+        ...prev,
+        [matchId]: data,
+      }))
+    } catch (err) {
+      console.error(`Errore fetch dettagli match ${matchId}:`, err)
+      // fallback automatico
+      const demo = testDetailedMatches[matchId]
+      if (demo) {
+        setDetailedMatches((prev) => ({
+          ...prev,
+          [matchId]: demo,
+        }))
+      }
+    }
+  }
+
+  // ==== SCEGLI QUALE USARE per la colonna di destra ====
+  const fetchMatchDetails = fetchMatchDetailsDev
+  // const fetchMatchDetails = fetchMatchDetailsProd
 
   useEffect(() => {
     fetchMatches()
   }, [])
 
+  // Formatta data/ora in italiano
   const formatMatchDate = (dateString?: string) =>
     dateString
       ? new Date(dateString).toLocaleString("it-IT", {
@@ -513,24 +221,36 @@ export default function Dashboard() {
         })
       : "Data non disponibile"
 
-  const getMatchStatus = (m: Match) => {
-    if (m.isLive) return "IN CORSO"
-    if (m.status_type === "finished") return "TERMINATO"
-    if (m.status_type === "scheduled") return "PROGRAMMATO"
-    return "NON DISPONIBILE"
+  const getMatchStatus = () => "IN CORSO"
+  const getStatusColor = () => "text-volleyball-orange"
+
+  const toggleFavorite = (id: number) => {
+    const isAdding = !favoriteMatches.includes(id)
+    if (isAdding) {
+      setAnimatingMatch(id)
+      fetchMatchDetails(id)
+      setTimeout(() => setAnimatingMatch(null), 800)
+    }
+    setFavoriteMatches((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    )
   }
 
-  const getStatusColor = (m: Match) => {
-    if (m.isLive) return "text-volleyball-orange"
-    if (m.status_type === "finished") return "text-muted-foreground"
-    if (m.status_type === "scheduled") return "text-volleyball-blue"
-    return "text-muted-foreground"
-  }
-
-  const toggleFavorite = (id: number) =>
-    setFavoriteMatches((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+  const sortedMatches = [...matches].sort((a, b) => {
+    const aFav = favoriteMatches.includes(a.id)
+    const bFav = favoriteMatches.includes(b.id)
+    if (aFav && !bFav) return -1
+    if (!aFav && bFav) return 1
+    return 0
+  })
 
   const selected = matches.filter((m) => favoriteMatches.includes(m.id))
+
+  useEffect(() => {
+    if (animatingMatch && scrollRef.current) {
+      scrollRef.current.scrollTop = 0
+    }
+  }, [animatingMatch])
 
   return (
     <div className="flex flex-col h-screen overflow-hidden">
@@ -570,7 +290,7 @@ export default function Dashboard() {
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-3 space-y-2">
+          <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 space-y-2">
             {loading ? (
               <div className="py-4 px-2 animate-pulse space-y-3">
                 {[1, 2, 3, 4, 5].map((i) => (
@@ -582,10 +302,15 @@ export default function Dashboard() {
             ) : matches.length === 0 ? (
               <div className="p-4 text-center text-muted-foreground">Nessuna partita in corso</div>
             ) : (
-              matches.map((match) => (
+              sortedMatches.map((match) => (
                 <div
                   key={match.id}
-                  className="flex items-center justify-between rounded-lg border border-border p-3 hover:bg-primary/5 transition-colors"
+                  className={`
+                    flex items-center justify-between rounded-lg border border-border p-3
+                    hover:bg-primary/5 transition-all duration-500
+                    ${animatingMatch === match.id ? "animate-favorite-added" : ""}
+                    ${favoriteMatches.includes(match.id) ? "bg-primary/5 border-primary/20" : ""}
+                  `}
                 >
                   <div className="flex items-center">
                     <button
@@ -598,17 +323,19 @@ export default function Dashboard() {
                       className="mr-3 focus:outline-none"
                     >
                       <Star
-                        className={`h-5 w-5 ${
-                          favoriteMatches.includes(match.id)
-                            ? "fill-volleyball-orange text-volleyball-orange"
-                            : "text-muted-foreground"
-                        } transition-colors`}
+                        className={`
+                          h-5 w-5 ${
+                            favoriteMatches.includes(match.id)
+                              ? "fill-volleyball-orange text-volleyball-orange"
+                              : "text-muted-foreground"
+                          } transition-colors
+                        `}
                       />
                     </button>
                     <div>
                       <p className="text-sm font-medium">{match.name}</p>
                       <p className="text-xs flex items-center gap-1.5">
-                        <span className={`font-medium ${getStatusColor(match)}`}>{getMatchStatus(match)}</span>
+                        <span className={`font-medium ${getStatusColor()}`}>{getMatchStatus()}</span>
                         <span className="text-muted-foreground">•</span>
                         <span className="text-muted-foreground">{formatMatchDate(match.start_time)}</span>
                       </p>
@@ -620,60 +347,211 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Colonna destra */}
+        {/* Colonna di destra */}
         <div className="md:w-3/4 h-full flex flex-col bg-background">
           <div className="flex-1 overflow-y-auto">
             <div className="p-6 h-full">
               {selected.length > 0 ? (
                 <div className="space-y-6">
-                  <h2 className="text-2xl font-heading font-bold text-foreground mb-4">I tuoi match preferiti</h2>
-                  {selected.map((match) => (
-                    <div
-                      key={match.id}
-                      className="w-full border border-border rounded-xl bg-card p-6 shadow-sm hover:shadow-md transition-shadow"
-                    >
-                      <div className="flex justify-between items-start mb-4">
-                        <h3 className="text-xl font-bold font-heading">{match.name}</h3>
-                        <span
-                          className={`px-3 py-1 rounded-full text-xs font-medium ${
-                            match.isLive
-                              ? "bg-volleyball-orange/10 text-volleyball-orange"
-                              : match.status_type === "finished"
-                                ? "bg-muted text-muted-foreground"
-                                : "bg-volleyball-blue/10 text-volleyball-blue"
-                          }`}
-                        >
-                          {getMatchStatus(match)}
-                        </span>
-                      </div>
+                  <h2 className="text-2xl font-heading font-bold text-foreground mb-4">
+                    I tuoi match preferiti
+                  </h2>
 
-                      <div className="text-sm text-muted-foreground mb-6 space-y-1">
-                        <p>
-                          Torneo: <span className="text-foreground">{match.tournament_name}</span>
-                        </p>
-                        <p>
-                          Data: <span className="text-foreground">{formatMatchDate(match.start_time)}</span>
-                        </p>
-                        <p className="mt-2 text-xs">{formatSetScores(match.home_team_score, match.away_team_score)}</p>
-                      </div>
+                  {selected.map((match) => {
+                    const detailed = detailedMatches[match.id]
+                    const [homeName = "Casa", awayName = "Ospiti"] = match.name.split(" vs ")
 
-                      <div className="flex justify-between items-center bg-muted/30 p-4 rounded-lg">
-                        <div className="text-center">
-                          <p className="font-medium text-foreground mb-2">{match.home_team_name}</p>
-                          <p className="text-3xl font-bold text-primary">{match.home_team_score.display}</p>
+                    return (
+                      <div
+                        key={match.id}
+                        className="w-full border border-border rounded-xl bg-card p-6 shadow-sm hover:shadow-md transition-shadow"
+                      >
+                        {/* Titolo e stato */}
+                        <div className="flex justify-between items-start mb-4">
+                          <h3 className="text-xl font-bold font-heading">{match.name}</h3>
+                          <span
+                            className="px-3 py-1 rounded-full text-xs font-medium bg-volleyball-orange/10 text-volleyball-orange"
+                          >
+                            {getMatchStatus()}
+                          </span>
                         </div>
-                        <div className="text-xl font-bold text-muted-foreground">vs</div>
-                        <div className="text-center">
-                          <p className="font-medium text-foreground mb-2">{match.away_team_name}</p>
-                          <p className="text-3xl font-bold text-primary">{match.away_team_score.display}</p>
+
+                        {/* Info base */}
+                        <div className="text-sm text-muted-foreground mb-6 space-y-1">
+                          <p>
+                            Torneo: <span className="text-foreground">–</span>
+                          </p>
+                          <p>
+                            Ultimo aggiornamento:{" "}
+                            <span className="text-foreground">
+                              {detailed ? formatMatchDate(detailed.timestamp) : formatMatchDate(match.start_time)}
+                            </span>
+                          </p>
                         </div>
+
+                        {/* ----------------- RIGA: Tabellone + Storico Set ----------------- */}
+                        <div className="flex gap-4 justify-start">
+                          {/* Tabellone sportivo compatto */}
+                          <div className="bg-black rounded-lg overflow-hidden shadow-lg">
+                            {/* Header colonne */}
+                            <div className="grid grid-cols-3 bg-gray-700 text-white text-xs font-medium">
+                              <div className="py-2 px-3 text-center border-r border-gray-600">Squadra</div>
+                              <div className="py-2 px-3 text-center border-r border-gray-600 bg-secondary/30">
+                                Set vinti
+                              </div>
+                              <div className="py-2 px-3 text-center bg-primary/30">Punti totali</div>
+                            </div>
+                            {/* Corpo tabellone */}
+                            <div className="grid grid-cols-3 text-white">
+                              {/* Casa */}
+                              <div className="py-3 px-3 border-r border-gray-700 border-b border-gray-700 font-medium text-sm truncate">
+                                {homeName}
+                              </div>
+                              <div className="py-3 px-3 border-r border-gray-700 border-b border-gray-700 text-center bg-secondary/20">
+                                <span className="text-xl font-bold text-secondary">
+                                  {detailed ? detailed.home_sets_won : "–"}
+                                </span>
+                              </div>
+                              <div className="py-3 px-3 border-b border-gray-700 text-center bg-primary/20">
+                                <span className="text-2xl font-bold text-primary">
+                                  {detailed ? detailed.home_current_score : "–"}
+                                </span>
+                              </div>
+                              {/* Ospiti */}
+                              <div className="py-3 px-3 border-r border-gray-700 font-medium text-sm truncate">
+                                {awayName}
+                              </div>
+                              <div className="py-3 px-3 border-r border-gray-700 text-center bg-secondary/20">
+                                <span className="text-xl font-bold text-secondary">
+                                  {detailed ? detailed.away_sets_won : "–"}
+                                </span>
+                              </div>
+                              <div className="py-3 px-3 text-center bg-primary/20">
+                                <span className="text-2xl font-bold text-primary">
+                                  {detailed ? detailed.away_current_score : "–"}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Storico Set - Layout Orizzontale Dinamico */}
+                          {detailed && (() => {
+                            // 1) Dividi set_info in array di righe
+                            const setsArr = detailed.set_info.split(" | ")
+                            const totalSets = setsArr.length
+                            if (totalSets === 0) return null
+
+                            // 2) Mappa totalSets+1 a una classe Tailwind fissa
+                            const gridColsMap: Record<number, string> = {
+                              2: "grid-cols-2",
+                              3: "grid-cols-3",
+                              4: "grid-cols-4",
+                              5: "grid-cols-5",
+                              6: "grid-cols-6",
+                            }
+                            // vogliamo totalSets+1 colonne
+                            const colsKey = totalSets + 1
+                            const gridColsClass = gridColsMap[colsKey] || "grid-cols-2"
+
+                            // 3) Estrai punteggi da ciascun "Set X: H-A"
+                            const scores = setsArr.map((entry) => {
+                              const parts = entry.split(":")[1].trim().split("-")
+                              return {
+                                home: parseInt(parts[0], 10),
+                                away: parseInt(parts[1], 10),
+                              }
+                            })
+
+                            // 4) Ultimo indice = set corrente
+                            const currentSetIndex = totalSets - 1
+
+                            return (
+                              <div className="bg-white border border-border rounded-lg overflow-hidden shadow-lg">
+                                {/* Header storico */}
+                                <div className="bg-gray-100 text-gray-800 text-center py-2 font-bold text-sm border-b border-border">
+                                  Storico Set
+                                </div>
+
+                                {/* Intestazioni colonne - numeri dei set */}
+                                <div
+                                  className={`grid ${gridColsClass} bg-gray-50 text-gray-700 text-xs font-medium border-b border-border`}
+                                >
+                                  {/* Colonna “Squadra” */}
+                                  <div className="py-2 px-2 text-center border-r border-border">Squadra</div>
+                                  {setsArr.map((_, idx) => {
+                                    const isCurrent = idx === currentSetIndex
+                                    return (
+                                      <div
+                                        key={idx}
+                                        className={`py-2 px-2 text-center border-r border-border ${
+                                          isCurrent ? "bg-primary/20" : ""
+                                        }`}
+                                      >
+                                        Set {idx + 1}
+                                        {isCurrent && <span className="text-primary ml-1">●</span>}
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+
+                                {/* Righe con i punteggi di ciascun set */}
+                                <div className="text-gray-800">
+                                  {/* Riga squadra casa */}
+                                  <div className={`grid ${gridColsClass} border-b border-border`}>
+                                    <div className="py-3 px-2 border-r border-border font-medium text-sm truncate">
+                                      {homeName}
+                                    </div>
+                                    {scores.map((s, idx) => {
+                                      const won = s.home > s.away
+                                      const isCurrent = idx === currentSetIndex
+                                      return (
+                                        <div
+                                          key={idx}
+                                          className={`py-3 px-2 text-center border-r border-border text-sm font-bold ${
+                                            won ? "text-green-600" : ""
+                                          } ${isCurrent ? "bg-primary/10" : ""}`}
+                                        >
+                                          {s.home}
+                                        </div>
+                                      )
+                                    })}
+                                  </div>
+
+                                  {/* Riga squadra ospiti */}
+                                  <div className={`grid ${gridColsClass}`}>
+                                    <div className="py-3 px-2 border-r border-border font-medium text-sm truncate">
+                                      {awayName}
+                                    </div>
+                                    {scores.map((s, idx) => {
+                                      const won = s.away > s.home
+                                      const isCurrent = idx === currentSetIndex
+                                      return (
+                                        <div
+                                          key={idx}
+                                          className={`py-3 px-2 text-center border-r border-border text-sm font-bold ${
+                                            won ? "text-green-600" : ""
+                                          } ${isCurrent ? "bg-primary/10" : ""}`}
+                                        >
+                                          {s.away}
+                                        </div>
+                                      )
+                                    })}
+                                  </div>
+                                </div>
+                              </div>
+                            )
+                          })()}
+                        </div>
+                        {/* ----------------- fine riga tabellone + storico ----------------- */}
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center h-full">
-                  <h1 className="text-4xl font-bold text-foreground font-heading mb-4">Segui i tuoi match</h1>
+                  <h1 className="text-4xl font-bold text-foreground font-heading mb-4">
+                    Segui i tuoi match
+                  </h1>
                   <p className="text-muted-foreground text-center max-w-md">
                     Seleziona i tuoi match preferiti dalla lista a sinistra per visualizzarli qui.
                   </p>
