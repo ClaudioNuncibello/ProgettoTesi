@@ -4,7 +4,7 @@ from kafka import KafkaProducer
 import json
 
 # — Configurazione —
-CSV_PATH = "/Users/claudio/Documents/GitHub/ProgettoTesi/scripts/live_snapshots.csv"
+CSV_PATH = "/Users/claudio/Documents/GitHub/ProgettoTesi/scripts/simulated_snapshots.csv"
 KAFKA_BROKER = "localhost:9092"
 TOPIC_NAME   = "matchvolley"
 

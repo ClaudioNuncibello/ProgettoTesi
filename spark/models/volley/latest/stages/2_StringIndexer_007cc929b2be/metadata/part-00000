@@ -1,1 +1,0 @@
-{"class":"org.apache.spark.ml.feature.StringIndexerModel","timestamp":1748961579070,"sparkVersion":"3.4.0","uid":"StringIndexer_007cc929b2be","paramMap":{"inputCol":"away_team_id","outputCol":"away_team_id_idx","handleInvalid":"keep"},"defaultParamMap":{"outputCol":"StringIndexer_007cc929b2be__output","stringOrderType":"frequencyDesc","handleInvalid":"error"}}

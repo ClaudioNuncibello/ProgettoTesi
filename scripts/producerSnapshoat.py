@@ -8,7 +8,8 @@ from kafka import KafkaProducer
 import json
 
 # Config
-API_KEY = "AymenURP9kWkgEatcBdcYA"
+#API_KEY = "AymenURP9kWkgEatcBdcYA"
+API_KEY = "Zc6NKDUI70eCDcwwgxj_kw"
 MATCHES_URL = "https://volleyball.sportdevs.com/matches?status_type=eq.live"
 
 headers = {
@@ -77,9 +78,31 @@ def compute_head_to_head_win_rate(matches, home_id):
 def get_team_total_points(score_map):
     return sum(v for k, v in score_map.items() if k.startswith("period_") and isinstance(v, int))
 
-def get_current_set_info(reason):
+def get_current_set_info(match_status, home_score_map, away_score_map):
+
+    # Se il game è in pause devo ritornare l'ultimo set appena finito
+    reason = match_status or ""
+    if "pause" in reason.lower():
+        # Raccolgo tutti i periodi esistenti (period_1, period_2, …) e ne prendo il massimo
+        periods = []
+        for key in home_score_map.keys():
+            if key.startswith("period_"):
+                try:
+                    periods.append(int(key.split("_")[1]))
+                except:
+                    pass
+        for key in away_score_map.keys():
+            if key.startswith("period_"):
+                try:
+                    periods.append(int(key.split("_")[1]))
+                except:
+                    pass
+        return max(periods) if periods else 1
+
+    # Caso normale: provo a estrarre un numero da match_status (es. "3rd set" → 3)
     try:
-        return int(reason.split()[0].strip('stndrdth'))
+        token = reason.split()[0]  # es. "3rd"
+        return int(token.strip("stndrdth"))  # strip di suffissi tipo "st", "nd", "rd", "th"
     except:
         return 1
 
@@ -92,7 +115,7 @@ def format_set_scores(home_scores, away_scores, current_set):
     return " | ".join(set_info)
 
 def collect_snapshot_data():
-    response = requests.get(MATCHES_URL, headers=headers, timeout=5)
+    response = requests.get(MATCHES_URL, headers=headers, timeout=10)
     response.raise_for_status()
     matches = response.json()
     rows = []
@@ -111,7 +134,7 @@ def collect_snapshot_data():
         score_diff = home_total - away_total
         set_diff = home_sets - away_sets
         match_status = match["status"]["reason"]
-        current_set = get_current_set_info(match_status)
+        current_set = get_current_set_info(match_status, home_score_map, away_score_map)
         home_current_score = home_score_map.get(f"period_{current_set}", '?')
         away_current_score = away_score_map.get(f"period_{current_set}", '?')        
         set_info = format_set_scores(home_score_map, away_score_map, current_set)
@@ -201,11 +224,11 @@ def check_kafka_connection():
 if __name__ == "__main__":
     LAST_SCORES = {}
 
-    if not check_kafka_connection():
-        print("❌ Kafka non è disponibile. Uscita dal programma.")
-        exit(1)
+#    if not check_kafka_connection():
+#        print("❌ Kafka non è disponibile. Uscita dal programma.")
+#        exit(1)
 
-    producer = create_producer()
+#    producer = create_producer()
 
     try:
         while True:
@@ -231,16 +254,17 @@ if __name__ == "__main__":
                     df = pd.DataFrame(to_write)
                     df.to_csv(OUT_PATH, mode='a', index=False, header=not os.path.exists(OUT_PATH))
                     print(f"✅ Snapshot aggiornato alle {datetime.now():%H:%M:%S} con {len(df)} nuove righe")
-                    send_to_kafka(producer, to_write)
+#                   send_to_kafka(producer, to_write)
                 else:
                     print(f"⏭️ {datetime.now():%H:%M:%S} nessun cambiamento di punteggio")
 
             except Exception as e:
                 print(f"❌ Errore nella raccolta dati: {e}")
 
-            time.sleep(60)
+            time.sleep(10)
 
     finally:
         # Qui chiudiamo sempre il producer
-        print("🛑 Chiusura Kafka producer...")
-        producer.close()
+#        print("🛑 Chiusura Kafka producer...")
+#        producer.close()
+         print("fine programma")

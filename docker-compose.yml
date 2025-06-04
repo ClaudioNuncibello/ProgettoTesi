@@ -96,7 +96,7 @@ services:
     volumes:
       # script spark.py
       - ./spark/spark.py:/home/spark.py
-      # contiene live_snapshots_target.csv per il batch-training
+      # contiene trainer_model.csv.csv per il batch-training
       - ./spark/data:/data
       # qui spark.py scriverà il pipeline model serializzato
       - ./spark/models:/data/models

@@ -40,7 +40,7 @@ interface DetailedMatch {
 
 // --- Dati di fallback per la colonna di sinistra ---
 const testSportDevMatches: SportDevMatch[] = [
-  { id: 206637, name: "Italy vs France", start_time: "2025-06-03T15:30:00Z" },
+  { id: 100001, name: "Italy vs France", start_time: "2025-06-03T15:30:00Z" },
   { id: 2, name: "Brazil vs Argentina", start_time: "2025-06-03T16:00:00Z" },
   { id: 3, name: "USA vs Poland", start_time: "2025-06-03T16:30:00Z" },
 ]
