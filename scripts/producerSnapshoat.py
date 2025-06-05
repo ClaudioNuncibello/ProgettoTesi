@@ -8,8 +8,11 @@ from kafka import KafkaProducer
 import json
 
 # Config
-#API_KEY = "AymenURP9kWkgEatcBdcYA"
-API_KEY = "Zc6NKDUI70eCDcwwgxj_kw"
+API_KEY = "AymenURP9kWkgEatcBdcYA"
+#API_KEY = "Zc6NKDUI70eCDcwwgxj_kw"
+#API_KEY = "2SRC4Sh4lkukveijWwruFw"
+#API_KEY = "RLrC2K7dukWrUVsacfcHyg"
+
 MATCHES_URL = "https://volleyball.sportdevs.com/matches?status_type=eq.live"
 
 headers = {
@@ -79,11 +82,9 @@ def get_team_total_points(score_map):
     return sum(v for k, v in score_map.items() if k.startswith("period_") and isinstance(v, int))
 
 def get_current_set_info(match_status, home_score_map, away_score_map):
-
-    # Se il game è in pause devo ritornare l'ultimo set appena finito
+    # Se il game è in pausa, ritorno l’ultimo set completato
     reason = match_status or ""
     if "pause" in reason.lower():
-        # Raccolgo tutti i periodi esistenti (period_1, period_2, …) e ne prendo il massimo
         periods = []
         for key in home_score_map.keys():
             if key.startswith("period_"):
@@ -99,27 +100,35 @@ def get_current_set_info(match_status, home_score_map, away_score_map):
                     pass
         return max(periods) if periods else 1
 
-    # Caso normale: provo a estrarre un numero da match_status (es. "3rd set" → 3)
+    # Caso normale: estraggo il numero dal testo “3rd set”, “2nd set”, ecc.
     try:
         token = reason.split()[0]  # es. "3rd"
-        return int(token.strip("stndrdth"))  # strip di suffissi tipo "st", "nd", "rd", "th"
+        return int(token.strip("stndrdth"))
     except:
         return 1
 
 def format_set_scores(home_scores, away_scores, current_set):
     set_info = []
     for i in range(1, current_set + 1):
-        home = home_scores.get(f'period_{i}', '?')
-        away = away_scores.get(f'period_{i}', '?')
+        home = home_scores.get(f'period_{i}', '0')
+        away = away_scores.get(f'period_{i}', '0')
         set_info.append(f"Set {i}: {home}-{away}")
     return " | ".join(set_info)
 
 def collect_snapshot_data():
+    """
+    Effettua la chiamata a MATCHES_URL e, se non ci sono partite live, restituisce lista vuota.
+    Altrimenti costruisce e restituisce la lista di snapshot (una riga per match).
+    """
     response = requests.get(MATCHES_URL, headers=headers, timeout=10)
     response.raise_for_status()
     matches = response.json()
-    rows = []
 
+    # Se non ci sono partite live, restituisco lista vuota
+    if not matches:
+        return []
+
+    rows = []
     for match in matches:
         match_id = match["id"]
         home_id = match["home_team_id"]
@@ -136,7 +145,7 @@ def collect_snapshot_data():
         match_status = match["status"]["reason"]
         current_set = get_current_set_info(match_status, home_score_map, away_score_map)
         home_current_score = home_score_map.get(f"period_{current_set}", '?')
-        away_current_score = away_score_map.get(f"period_{current_set}", '?')        
+        away_current_score = away_score_map.get(f"period_{current_set}", '?')
         set_info = format_set_scores(home_score_map, away_score_map, current_set)
 
         duration = match.get("duration", 0)
@@ -172,21 +181,6 @@ def collect_snapshot_data():
         rows.append(row)
 
     return rows
-
-def get_live_matches():
-    resp = requests.get(MATCHES_URL, headers=headers)
-    resp.raise_for_status()
-    return resp.json()
-
-def print_live_matches(matches):
-    if not matches:
-        print("❌ Nessuna partita live in corso. Termino il programma.")
-    else:
-        print("🏐 Partite live in corso:")
-        for m in matches:
-            print(f" • ID {m['id']}: {m['name']}")
-
-# -------------------- Kafka Producer Utility --------------------
 
 def create_producer():
     return KafkaProducer(
@@ -224,21 +218,24 @@ def check_kafka_connection():
 if __name__ == "__main__":
     LAST_SCORES = {}
 
-#    if not check_kafka_connection():
-#        print("❌ Kafka non è disponibile. Uscita dal programma.")
-#        exit(1)
-
-#    producer = create_producer()
+    # Se vuoi ripristinare il controllo Kafka
+    # if not check_kafka_connection():
+    #     print("❌ Kafka non è disponibile. Uscita dal programma.")
+    #     exit(1)
+    # producer = create_producer()
 
     try:
         while True:
             try:
-                live_matches = get_live_matches()
-                print_live_matches(live_matches)
-                if not live_matches:
+                # Chiedo direttamente gli snapshot delle partite live
+                snapshots = collect_snapshot_data()
+
+                # Se non ci sono partite live, esco
+                if not snapshots:
+                    print("❌ Nessuna partita live in corso...")
                     break
 
-                snapshots = collect_snapshot_data()
+                # Filtro solo gli snapshot con punteggio cambiato
                 to_write = []
                 for snap in snapshots:
                     mid = snap["match_id"]
@@ -249,12 +246,17 @@ if __name__ == "__main__":
 
                 OUT_PATH = "/Users/claudio/Documents/GitHub/ProgettoTesi/scripts/live_snapshots.csv"
                 os.makedirs(os.path.dirname(OUT_PATH), exist_ok=True)
-                
+
                 if to_write:
                     df = pd.DataFrame(to_write)
                     df.to_csv(OUT_PATH, mode='a', index=False, header=not os.path.exists(OUT_PATH))
-                    print(f"✅ Snapshot aggiornato alle {datetime.now():%H:%M:%S} con {len(df)} nuove righe")
-#                   send_to_kafka(producer, to_write)
+
+                    # Estrazione degli match_id appena scritti
+                    nuovi_ids = [row["match_id"] for row in to_write]
+                    print(f"✅ Snapshot aggiornato alle {datetime.now():%H:%M:%S} con {len(df)} nuove righe. "
+                          f"Match ID salvati: {nuovi_ids}")
+
+                    # send_to_kafka(producer, to_write)
                 else:
                     print(f"⏭️ {datetime.now():%H:%M:%S} nessun cambiamento di punteggio")
 
@@ -264,7 +266,7 @@ if __name__ == "__main__":
             time.sleep(10)
 
     finally:
-        # Qui chiudiamo sempre il producer
-#        print("🛑 Chiusura Kafka producer...")
-#        producer.close()
-         print("fine programma")
+        # Se si usa Kafka, decommenta
+        # print("🛑 Chiusura Kafka producer...")
+        # producer.close()
+        print("fine programma")
