@@ -83,6 +83,7 @@ Da queste verranno estratte feature per:
 ├── spark/
 │   └── spark.py                # Codice Spark per analisi predittive (WIP)
 │   └── data/                   # Contiene live_snapshots_target.csv per il batch-training e pipeline model serializzato
+│   └── data/                   # Contiene il modello di predizione
 │   └── checkpoint/             # Contiene checkpoint per Elasticsearch streaming
 ├── frontend/                   # Web app React + Next.js
 ├── backtend/                   # Personal API di ricerca basata su Elasticsearch
@@ -98,13 +99,13 @@ Da queste verranno estratte feature per:
 
 | Componente                  | Stato           |
 |-----------------------------|---------------- |
-| Web App React               | ⚠️ Integrata, in attesa di integrazione backend (gia sviluppato)   |
+| Web App React               | ⚠️ Operativo,front-end layout in miglioramento  |
 | Kafka                       | ✅ Operativo    |
 | Logstash                    | ✅ Operativo    |
 | Elasticsearch               | ✅ Operativo    |
 | Kibana                      | ✅ Operativo    |
-| Spark                       | ⚠️ Integrato, in attesa di modelli ML |
-| Predizioni                  | ⚠️ In sviluppo   |
+| Spark                       | ✅ Operativo    |
+| Predizioni                  | ⚠️ Modello completato, fase di raccolta dati  |
 | Integrazione API SportDevs  | ✅ Completata   |
 
 ---
