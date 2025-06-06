@@ -18,7 +18,6 @@ interface SportDevMatch {
 // --- Unica interfaccia per i dettagli (colonna di destra) ---
 interface DetailedMatch {
   match_id: number
-  timestamp: string
   home_team_id: number
   away_team_id: number
   home_score_total: number
@@ -40,13 +39,13 @@ interface DetailedMatch {
 
 // --- Dati di fallback per la colonna di sinistra ---
 const testSportDevMatches: SportDevMatch[] = [
-  { id: 100001, name: "Italy vs France", start_time: "2025-06-03T15:30:00Z" },
-  { id: 2, name: "Brazil vs Argentina", start_time: "2025-06-03T16:00:00Z" },
-  { id: 3, name: "USA vs Poland", start_time: "2025-06-03T16:30:00Z" },
+  { id: 100006, name: "Italy vs France", start_time: "2025-06-03T15:30:00Z" },
+  { id: 100002, name: "Brazil vs Argentina", start_time: "2025-06-03T16:00:00Z" },
+  { id: 100003, name: "USA vs Poland", start_time: "2025-06-03T16:30:00Z" },
 ]
 
 export default function Dashboard() {
-  // Stato per la colonna di sinistra
+  // Stato per la colonna sinistra
   const [matches, setMatches] = useState<SportDevMatch[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -71,7 +70,7 @@ export default function Dashboard() {
     }
   }
 
-  // --- Fetch “Prod” per la lista SportDevs (colonna sinistra) ---
+  // --- Fetch “Prod” per la lista SportDevs (colonna di sinistra) ---
   async function fetchMatchesProd() {
     setError(null)
     setLoading(true)
@@ -109,8 +108,8 @@ export default function Dashboard() {
         ...prev,
         [matchId]: data,
       }))
-    } catch (err) {
-      
+    } catch {
+      // Gestione errori silenziosa per dettagli
     }
   }
 
@@ -119,16 +118,15 @@ export default function Dashboard() {
   }, [])
 
   useEffect(() => {
-    const intervall = setInterval(()=> {
-      Object.keys(detailedMatches).map(key=>{
-        fetchMatchDetails(key)
-        //console.log(detailedMatches[key])
+    const intervall = setInterval(() => {
+      Object.keys(detailedMatches).forEach((key) => {
+        fetchMatchDetails(Number(key))
       })
     }, 10000)
-    return ()=>clearInterval(intervall)
+    return () => clearInterval(intervall)
   }, [detailedMatches])
 
-  // Formatta data/ora in italiano
+  // Formatta data/ora in italiano per data inizio
   const formatMatchDate = (dateString?: string) =>
     dateString
       ? new Date(dateString).toLocaleString("it-IT", {
@@ -256,7 +254,9 @@ export default function Dashboard() {
                       <p className="text-xs flex items-center gap-1.5">
                         <span className={`font-medium ${getStatusColor()}`}>{getMatchStatus()}</span>
                         <span className="text-muted-foreground">•</span>
-                        <span className="text-muted-foreground">{formatMatchDate(match.start_time)}</span>
+                        <span className="text-muted-foreground">
+                          {formatMatchDate(match.start_time)}
+                        </span>
                       </p>
                     </div>
                   </div>
@@ -280,6 +280,24 @@ export default function Dashboard() {
                     const detailed = detailedMatches[match.id]
                     const [homeName = "Casa", awayName = "Ospiti"] = match.name.split(" vs ")
 
+                    // Calcolo setArr, gridColsClass, scores e currentSetIndex
+                    const setsArr = detailed?.set_info.split(" | ") || []
+                    const totalSets = setsArr.length
+                    const gridColsMap: Record<number, string> = {
+                      2: "grid-cols-2",
+                      3: "grid-cols-3",
+                      4: "grid-cols-4",
+                      5: "grid-cols-5",
+                      6: "grid-cols-6",
+                    }
+                    const colsKey = totalSets + 1 // 1 colonna “Squadra” + totalSets per i set
+                    const gridColsClass = gridColsMap[colsKey] || "grid-cols-2"
+                    const scores = setsArr.map((entry) => {
+                      const parts = entry.split(":")[1].trim().split("-")
+                      return { home: parseInt(parts[0], 10), away: parseInt(parts[1], 10) }
+                    })
+                    const currentSetIndex = totalSets - 1
+
                     return (
                       <div
                         key={match.id}
@@ -301,123 +319,50 @@ export default function Dashboard() {
                             Torneo: <span className="text-foreground">–</span>
                           </p>
                           <p>
-                            Ultimo aggiornamento:{" "}
+                            inizio partita:{" "}
                             <span className="text-foreground">
-                              {detailed ? formatMatchDate(detailed.timestamp) : formatMatchDate(match.start_time)}
+                              {formatMatchDate(match.start_time)}
                             </span>
                           </p>
                         </div>
 
-                        {/* ----------------- RIGA: Tabellone + Storico Set ----------------- */}
-                        <div className="flex gap-4 justify-start">
-                          {/* Tabellone sportivo compatto */}
-                          <div className="bg-black rounded-lg overflow-hidden shadow-lg">
-                            {/* Header colonne */}
-                            <div className="grid grid-cols-3 bg-gray-700 text-white text-xs font-medium">
-                              <div className="py-2 px-3 text-center border-r border-gray-600">Squadra</div>
-                              <div className="py-2 px-3 text-center border-r border-gray-600 bg-secondary/30">
-                                Set vinti
-                              </div>
-                              <div className="py-2 px-3 text-center bg-primary/30">Punti totali</div>
-                            </div>
-                            {/* Corpo tabellone */}
-                            <div className="grid grid-cols-3 text-white">
-                              {/* Casa */}
-                              <div className="py-3 px-3 border-r border-gray-700 border-b border-gray-700 font-medium text-sm truncate">
-                                {homeName}
-                              </div>
-                              <div className="py-3 px-3 border-r border-gray-700 border-b border-gray-700 text-center bg-secondary/20">
-                                <span className="text-xl font-bold text-secondary">
-                                  {detailed ? detailed.home_sets_won : "–"}
-                                </span>
-                              </div>
-                              <div className="py-3 px-3 border-b border-gray-700 text-center bg-primary/20">
-                                <span className="text-2xl font-bold text-primary">
-                                  {detailed ? detailed.home_current_score : "–"}
-                                </span>
-                              </div>
-                              {/* Ospiti */}
-                              <div className="py-3 px-3 border-r border-gray-700 font-medium text-sm truncate">
-                                {awayName}
-                              </div>
-                              <div className="py-3 px-3 border-r border-gray-700 text-center bg-secondary/20">
-                                <span className="text-xl font-bold text-secondary">
-                                  {detailed ? detailed.away_sets_won : "–"}
-                                </span>
-                              </div>
-                              <div className="py-3 px-3 text-center bg-primary/20">
-                                <span className="text-2xl font-bold text-primary">
-                                  {detailed ? detailed.away_current_score : "–"}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Storico Set - Layout Orizzontale Dinamico */}
-                          {detailed && (() => {
-                            // 1) Dividi set_info in array di righe
-                            const setsArr = detailed.set_info.split(" | ")
-                            const totalSets = setsArr.length
-                            if (totalSets === 0) return null
-
-                            // 2) Mappa totalSets+1 a una classe Tailwind fissa
-                            const gridColsMap: Record<number, string> = {
-                              2: "grid-cols-2",
-                              3: "grid-cols-3",
-                              4: "grid-cols-4",
-                              5: "grid-cols-5",
-                              6: "grid-cols-6",
-                            }
-                            // vogliamo totalSets+1 colonne
-                            const colsKey = totalSets + 1
-                            const gridColsClass = gridColsMap[colsKey] || "grid-cols-2"
-
-                            // 3) Estrai punteggi da ciascun "Set X: H-A"
-                            const scores = setsArr.map((entry) => {
-                              const parts = entry.split(":")[1].trim().split("-")
-                              return {
-                                home: parseInt(parts[0], 10),
-                                away: parseInt(parts[1], 10),
-                              }
-                            })
-
-                            // 4) Ultimo indice = set corrente
-                            const currentSetIndex = totalSets - 1
-
-                            return (
-                              <div className="bg-white border border-border rounded-lg overflow-hidden shadow-lg">
-                                {/* Header storico */}
-                                <div className="bg-gray-100 text-gray-800 text-center py-2 font-bold text-sm border-b border-border">
-                                  Storico Set
-                                </div>
-
-                                {/* Intestazioni colonne - numeri dei set */}
+                        {/* ─────────────────────────────────────────────────────────────── */}
+                        {/* Mostra tabella + 2 barre (Forma ultimi 5 + Head-to-Head) solo se 'detailed' è definito */}
+                        {detailed ? (
+                          <>
+                            {/* ─── 1) Flex container: Tabella (a sinistra) + Metriche (a destra) ─── */}
+                            <div className="flex gap-16 items-start">
+                              {/* ───────────────────────── Tabella ───────────────────────── */}
+                              <div className="flex-none w-1/3 bg-white rounded-lg overflow-hidden shadow-lg">
+                                {/* Header tabella */}
                                 <div
-                                  className={`grid ${gridColsClass} bg-gray-50 text-gray-700 text-xs font-medium border-b border-border`}
+                                  className={`
+                                    grid ${gridColsClass} bg-gray-100 text-gray-700 text-xs font-semibold
+                                    border-b border-border
+                                  `}
                                 >
-                                  {/* Colonna “Squadra” */}
-                                  <div className="py-2 px-2 text-center border-r border-border">Squadra</div>
+                                  <div className="py-2 px-2 text-center">Squadra</div>
                                   {setsArr.map((_, idx) => {
                                     const isCurrent = idx === currentSetIndex
                                     return (
                                       <div
                                         key={idx}
-                                        className={`py-2 px-2 text-center border-r border-border ${
-                                          isCurrent ? "bg-primary/20" : ""
-                                        }`}
+                                        className={`
+                                          py-2 px-2 text-center
+                                          ${isCurrent ? "text-volleyball-orange" : ""}
+                                        `}
                                       >
-                                        Set {idx + 1}
-                                        {isCurrent && <span className="text-primary ml-1">●</span>}
+                                        {isCurrent ? "Set corrente" : `Set ${idx + 1}`}
+                                        {isCurrent && <span className="ml-1">●</span>}
                                       </div>
                                     )
                                   })}
                                 </div>
-
-                                {/* Righe con i punteggi di ciascun set */}
-                                <div className="text-gray-800">
-                                  {/* Riga squadra casa */}
-                                  <div className={`grid ${gridColsClass} border-b border-border`}>
-                                    <div className="py-3 px-2 border-r border-border font-medium text-sm truncate">
+                                {/* Corpo tabella */}
+                                <div className="divide-y divide-border">
+                                  {/* Riga squadra “Casa” */}
+                                  <div className={`grid ${gridColsClass} bg-white`}>
+                                    <div className="py-2 px-2 font-medium text-sm truncate text-center">
                                       {homeName}
                                     </div>
                                     {scores.map((s, idx) => {
@@ -426,19 +371,20 @@ export default function Dashboard() {
                                       return (
                                         <div
                                           key={idx}
-                                          className={`py-3 px-2 text-center border-r border-border text-sm font-bold ${
-                                            won ? "text-green-600" : ""
-                                          } ${isCurrent ? "bg-primary/10" : ""}`}
+                                          className={`
+                                            py-2 px-2 text-center text-sm font-bold
+                                            ${won ? "text-green-600" : "text-gray-800"}
+                                            ${isCurrent ? "text-volleyball-orange" : ""}
+                                          `}
                                         >
                                           {s.home}
                                         </div>
                                       )
                                     })}
                                   </div>
-
-                                  {/* Riga squadra ospiti */}
-                                  <div className={`grid ${gridColsClass}`}>
-                                    <div className="py-3 px-2 border-r border-border font-medium text-sm truncate">
+                                  {/* Riga squadra “Ospiti” */}
+                                  <div className={`grid ${gridColsClass} bg-white`}>
+                                    <div className="py-2 px-2 font-medium text-sm truncate text-center">
                                       {awayName}
                                     </div>
                                     {scores.map((s, idx) => {
@@ -447,9 +393,11 @@ export default function Dashboard() {
                                       return (
                                         <div
                                           key={idx}
-                                          className={`py-3 px-2 text-center border-r border-border text-sm font-bold ${
-                                            won ? "text-green-600" : ""
-                                          } ${isCurrent ? "bg-primary/10" : ""}`}
+                                          className={`
+                                            py-2 px-2 text-center text-sm font-bold
+                                            ${won ? "text-green-600" : "text-gray-800"}
+                                            ${isCurrent ? "text-volleyball-orange" : ""}
+                                          `}
                                         >
                                           {s.away}
                                         </div>
@@ -458,10 +406,137 @@ export default function Dashboard() {
                                   </div>
                                 </div>
                               </div>
-                            )
-                          })()}
-                        </div>
-                        {/* ----------------- fine riga tabellone + storico ----------------- */}
+
+                              {/* ─── 2) Colonna di destra: Forma ultimi 5 & Head-to-Head ─── */}
+                              <div className="flex-1 mt-0 space-y-6">
+                                {/* ── 2.1) Blocco “Forma ultimi 5” ── */}
+                                <div className="inline-grid grid-cols-2 gap-10">
+                                  {/* Home (ultimi 5) */}
+                                  <div className="space-y-1">
+                                    <span className="block text-sm font-medium text-[#0A1931]">
+                                      Home (ultimi 5)
+                                    </span>
+                                    <div className="flex items-center gap-1">
+                                      {Array.from({ length: 5 }).map((_, idx) => {
+                                        const winsCount = Math.round(detailed.home_win_rate_last5 * 5)
+                                        const isWin = idx < winsCount
+                                        return (
+                                          <div
+                                            key={idx}
+                                            className={`
+                                              w-6 h-6 rounded-md flex items-center justify-center
+                                              text-xs font-semibold text-white
+                                              ${isWin ? "bg-green-600" : "bg-red-600"}
+                                            `}
+                                          >
+                                            {isWin ? "V" : "P"}
+                                          </div>
+                                        )
+                                      })}
+                                    </div>
+                                  </div>
+
+                                  {/* Away (ultimi 5) */}
+                                  <div className="space-y-1">
+                                    <span className="block text-sm font-medium text-[#0A1931]">
+                                      Away (ultimi 5)
+                                    </span>
+                                    <div className="flex items-center gap-1">
+                                      {Array.from({ length: 5 }).map((_, idx) => {
+                                        const winsCount = Math.round(detailed.away_win_rate_last5 * 5)
+                                        const isWin = idx < winsCount
+                                        return (
+                                          <div
+                                            key={idx}
+                                            className={`
+                                              w-6 h-6 rounded-md flex items-center justify-center
+                                              text-xs font-semibold text-white
+                                              ${isWin ? "bg-green-600" : "bg-red-600"}
+                                            `}
+                                          >
+                                            {isWin ? "V" : "P"}
+                                          </div>
+                                        )
+                                      })}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* ── 2.2) Head-to-Head Win Rate ── */}
+                                <div className=" w-1/2 space-y-1">
+                                  <span className="block text-sm font-medium text-[#0A1931]">
+                                    Head-to-Head Win Rate
+                                  </span>
+                                  <div className="w-full h-3 flex rounded-full overflow-hidden bg-gray-200">
+                                    <div
+                                      className="h-full"
+                                      style={{
+                                        width: `${detailed.head_to_head_win_rate_home * 100}%`,
+                                        backgroundColor: "#22C55E",
+                                      }}
+                                    />
+                                    <div
+                                      className="h-full"
+                                      style={{
+                                        width: `${(1 - detailed.head_to_head_win_rate_home) * 100}%`,
+                                        backgroundColor: "#EF4444",
+                                      }}
+                                    />
+                                  </div>
+                                  <div className="flex justify-between text-xs text-[#0A1931]">
+                                    <span>
+                                      Casa{" "}
+                                      {(detailed.head_to_head_win_rate_home * 100).toFixed(1)}%
+                                    </span>
+                                    <span>
+                                      Ospiti{" "}
+                                      {((1 - detailed.head_to_head_win_rate_home) * 100).toFixed(1)}%
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* ─────────────────────────────────────────────────────────────── */}
+                            {/* ─── 3) Predicted Win (sotto il flex container) ─── */}
+                            <div className="mt-6">
+                              <div className="w-full space-y-1">
+                                <span className="block text-sm font-medium text-[#0A1931]">
+                                  Predicted Win
+                                </span>
+                                <div className="w-full h-3 flex rounded-full overflow-hidden bg-gray-200">
+                                  <div
+                                    className="h-full"
+                                    style={{
+                                      width: `${detailed.predicted_win * 100}%`,
+                                      backgroundColor: "#F55353",
+                                    }}
+                                  />
+                                  <div
+                                    className="h-full"
+                                    style={{
+                                      width: `${(1 - detailed.predicted_win) * 100}%`,
+                                      backgroundColor: "#FFA500",
+                                    }}
+                                  />
+                                </div>
+                                <div className="flex justify-between text-xs text-[#0A1931]">
+                                  <span>
+                                    Casa {(detailed.predicted_win * 100).toFixed(1)}%
+                                  </span>
+                                  <span>
+                                    Ospiti{" "}
+                                    {((1 - detailed.predicted_win) * 100).toFixed(1)}%
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="text-center text-sm text-gray-500">
+                            Caricamento dettagli…
+                          </div>
+                        )}
                       </div>
                     )
                   })}

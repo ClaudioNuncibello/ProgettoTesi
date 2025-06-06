@@ -115,26 +115,72 @@ def format_set_scores(home_scores, away_scores, current_set):
         set_info.append(f"Set {i}: {home}-{away}")
     return " | ".join(set_info)
 
+import requests
+import time
+
+MAX_RETRIES = 3
+RETRY_BACKOFF = 5  # secondi
+
 def collect_snapshot_data():
     """
-    Effettua la chiamata a MATCHES_URL e, se non ci sono partite live, restituisce lista vuota.
-    Altrimenti costruisce e restituisce la lista di snapshot (una riga per match).
+    Effettua la chiamata a MATCHES_URL, gestisce 500 con retry e ritorna la lista di snapshot.
+    Se fallisce irreversibilmente, ritorna [].
     """
-    response = requests.get(MATCHES_URL, headers=headers, timeout=10)
-    response.raise_for_status()
-    matches = response.json()
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            response = requests.get(MATCHES_URL, headers=headers, timeout=10)
+        except requests.RequestException as e:
+            print(f"❌ Errore di connessione (tentativo {attempt}/{MAX_RETRIES}): {e}")
+            if attempt < MAX_RETRIES:
+                time.sleep(RETRY_BACKOFF)
+                continue
+            else:
+                return []
 
-    # Se non ci sono partite live, restituisco lista vuota
-    if not matches:
-        return []
+        status = response.status_code
+        if status == 500:
+            print(f"❌ [Tentativo {attempt}/{MAX_RETRIES}] API volley ha risposto con 500")
+            # Se ci sono informazioni nel corpo, le stampo
+            print("Body:", response.text[:200], "…")
+            if attempt < MAX_RETRIES:
+                time.sleep(RETRY_BACKOFF)
+                continue
+            else:
+                return []
+        elif status == 429:
+            retry_after = int(response.headers.get("Retry-After", 60))
+            print(f"⚠️ Rate limit superato (429). Riposo {retry_after}s.")
+            time.sleep(retry_after)
+            continue
+        elif status != 200:
+            print(f"❌ Risposta inattesa: {status}")
+            try:
+                print("Body:", response.text[:200], "…")
+            except:
+                pass
+            return []
+
+        # Se arrivo qui, ho status == 200
+        try:
+            matches = response.json()
+        except ValueError:
+            print("❌ Non è stato possibile decodificare il JSON dalla risposta (status=200)")
+            print("Body:", response.text[:200], "…")
+            return []
+
+        if not matches:
+            return []
+
+        # Ho ricevuto un JSON valido non vuoto: esco dal ciclo di retry
+        break
 
     rows = []
     for match in matches:
-        match_id = match["id"]
-        home_id = match["home_team_id"]
-        away_id = match["away_team_id"]
-        home_score_map = match["home_team_score"]
-        away_score_map = match["away_team_score"]
+        match_id = match.get("id")
+        home_id = match.get("home_team_id")
+        away_id = match.get("away_team_id")
+        home_score_map = match.get("home_team_score", {})
+        away_score_map = match.get("away_team_score", {})
 
         home_sets = home_score_map.get("display", 0)
         away_sets = away_score_map.get("display", 0)
@@ -142,15 +188,14 @@ def collect_snapshot_data():
         away_total = get_team_total_points(away_score_map)
         score_diff = home_total - away_total
         set_diff = home_sets - away_sets
-        match_status = match["status"]["reason"]
+        match_status = match.get("status", {}).get("reason", "")
         current_set = get_current_set_info(match_status, home_score_map, away_score_map)
-        home_current_score = home_score_map.get(f"period_{current_set}", '?')
-        away_current_score = away_score_map.get(f"period_{current_set}", '?')
+        home_current_score = home_score_map.get(f"period_{current_set}", "?")
+        away_current_score = away_score_map.get(f"period_{current_set}", "?")
         set_info = format_set_scores(home_score_map, away_score_map, current_set)
 
         duration = match.get("duration", 0)
-        mins = duration // 60
-        secs = duration % 60
+        mins, secs = divmod(duration, 60)
         game_duration = f"{mins}m {secs}s"
 
         home_win_rate_last5 = compute_win_rate(get_team_last5_matches(home_id), home_id)
