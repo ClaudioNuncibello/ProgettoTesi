@@ -4,14 +4,15 @@ import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import { Star, RefreshCw } from "lucide-react"
 
-const API_KEY = "AymenURP9kWkgEatcBdcYA"
-const MATCHES_URL = "https://volleyball.sportdevs.com/matches?season_id=eq.17700"
+const API_KEY = "2SRC4Sh4lkukveijWwruFw"
+const MATCHES_URL = "https://volleyball.sportdevs.com/matches?status_type=eq.live"
 const DETAIL_URL = (matchId: number) => `http://localhost:8000/match/${matchId}`
 
 // --- Tipo per i soli match SportDevs (colonna di sinistra) ---
 interface SportDevMatch {
   id: number
   name: string
+  tournament_name : string
   start_time: string
 }
 
@@ -39,9 +40,9 @@ interface DetailedMatch {
 
 // --- Dati di fallback per la colonna di sinistra ---
 const testSportDevMatches: SportDevMatch[] = [
-  { id: 100006, name: "Italy vs France", start_time: "2025-06-03T15:30:00Z" },
-  { id: 100002, name: "Brazil vs Argentina", start_time: "2025-06-03T16:00:00Z" },
-  { id: 100003, name: "USA vs Poland", start_time: "2025-06-03T16:30:00Z" },
+  { id: 100006, name: "Italy vs France", start_time: "2025-06-03T15:30:00Z", tournament_name:"VNL woman"},
+  { id: 100002, name: "Brazil vs Argentina", start_time: "2025-06-03T16:00:00Z", tournament_name:"VNL woman" },
+  { id: 100003, name: "USA vs Poland", start_time: "2025-06-03T16:30:00Z", tournament_name:"VNL woman" },
 ]
 
 export default function Dashboard() {
@@ -84,6 +85,7 @@ export default function Dashboard() {
         id: m.id,
         name: m.name,
         start_time: m.start_time,
+        tournament_name : m.tournament_name,
       }))
       setMatches(minimal)
     } catch (err) {
@@ -95,8 +97,8 @@ export default function Dashboard() {
   }
 
   // ==== SCEGLI QUALE USARE per la colonna sinistra ====
-  const fetchMatches = fetchMatchesDev
-  // const fetchMatches = fetchMatchesProd
+  //const fetchMatches = fetchMatchesDev
+  const fetchMatches = fetchMatchesProd
 
   // --- Fetch “Prod” per i dettagli (colonna di destra) ---
   async function fetchMatchDetails(matchId: number) {
@@ -316,7 +318,7 @@ export default function Dashboard() {
                         {/* Info base */}
                         <div className="text-sm text-muted-foreground mb-6 space-y-1">
                           <p>
-                            Torneo: <span className="text-foreground">–</span>
+                            Torneo: <span className="text-foreground"> {match.tournament_name} </span>
                           </p>
                           <p>
                             inizio partita:{" "}
