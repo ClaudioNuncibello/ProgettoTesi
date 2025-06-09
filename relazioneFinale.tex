@@ -27,6 +27,25 @@
   {\normalfont\small\itshape}
   {\thesubsection}{1em}{}
 
+
+
+%impostazione personalizzate per linee di codice
+\usepackage{listings}
+\usepackage[x11names]{xcolor}
+\definecolor{MyGreen}{HTML}{16610E}
+
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  breaklines=true,
+  breakatwhitespace=true,
+  keywordstyle=\color{blue},
+  commentstyle=\color{gray},
+  stringstyle=\color{MyGreen},
+  showstringspaces=false,
+  columns=fullflexible,
+  language=Python
+}
+
 % Impostazioni personalizzate per capitoli e piè di pagina
 \titleformat{\chapter}[block]
   {\normalfont\Huge\bfseries}
@@ -287,17 +306,137 @@ Allo stesso tempo, l’infrastruttura rimane predisposta per un’evoluzione fut
 
 \chapter{Data Ingestion e Analisi Streaming}
 
-\section{Parsing e Trasformazione con Logstash}
-% Testo da inserire
+In questo capitolo descriviamo l’architettura di elaborazione in real-time basata su Spark Structured Streaming: dalla lettura dei topic Kafka contenenti sia le feature grezze che gli output del modello, fino all’indicizzazione su Elasticsearch.
 
-\section{Storage e Indicizzazione in Elasticsearch}
-% Testo da inserire
+\section{Integrazione di Spark Structured Streaming con Kafka}
 
-\section{Analisi Streaming con Spark}
-% Testo da inserire
+Nel file \texttt{spark/spark.py} la pipeline di ingestione inizia con l’istanza di una \texttt{SparkSession}, a cui vengono aggiunte le dipendenze per i connettori Kafka e Elasticsearch. Inoltre, viene disabilitata la compressione Parquet, poiché la pipeline non prevede salvataggi persistenti in formato Parquet e punta a ridurre la latenza e il carico computazionale durante la gestione dei checkpoint interni di Spark Structured Streaming.
 
-\section{Feature e Score Predittivi}
-% Testo da inserire
+\begin{lstlisting}[language=Scala]
+spark = SparkSession.builder \
+    .appName("VolleyballSnapshotProcessor") \
+    .config("spark.jars.packages",
+        "org.apache.spark:spark-sql-kafka-0-10_2.12:3.3.0,"
+        "org.elasticsearch:elasticsearch-spark-30_2.12:8.7.1") \
+    .config("spark.sql.parquet.compression.codec", "uncompressed") \
+    .getOrCreate()
+\end{lstlisting}
+
+Subito dopo si definisce lo \texttt{snapshot\_schema}, un oggetto \texttt{StructType} che mappa ciascun campo del JSON di input :
+
+\begin{lstlisting}[language=Scala]
+snapshot_schema = StructType(Seq(
+  StructField("match_id", IntegerType, nullable = false),
+  StructField("timestamp", StringType,  nullable = false),
+  ...
+  StructField("head_to_head_win_rate_home", DoubleType, nullable = false)
+))
+\end{lstlisting}
+
+Lo stream Kafka viene aperto con:
+
+\begin{lstlisting}[language=Scala]
+kafka_df = spark.readStream
+  .format("kafka")
+  .option("kafka.bootstrap.servers", "kafka-volley:9092")
+  .option("subscribe", "matchvolley")
+  .option("startingOffsets", "latest")
+  .load()
+\end{lstlisting}
+
+Il DataFrame ottenuto espone i campi \texttt{key} e \texttt{value} come \texttt{binary}, oltre a metadati quali \texttt{topic}, \texttt{partition}, \texttt{offset} e \texttt{timestamp}. Per deserializzare il payload JSON:
+
+\begin{lstlisting}[language=Scala]
+parsed_df = kafka_df
+  .select(from_json(col("value").cast("string"), snapshot_schema).alias("data"))
+  .select("data.*")
+\end{lstlisting}
+
+\newpage
+Infine, per convertire la colonna \texttt{timestamp} da \texttt{StringType} a \texttt{TimestampType} mantenendo la precisione ai microsecondi, si applica:
+
+\begin{lstlisting}[language=Scala]
+processed_df = parsed_df.withColumn(
+  "timestamp",
+  date_format(
+    to_timestamp(col("timestamp"), "yyyy-MM-dd HH:mm:ss.SSSSSS"),
+    "yyyy-MM-dd HH:mm:ss.SSSSSS"
+  )
+)
+\end{lstlisting}
+
+Il DataFrame \texttt{processed\_df} risultante contiene ora solo colonne tipizzate e pronte per le fasi successive di scoring e indicizzazione.
+
+
+\section{Modello predittivo: training, feature e scoring in tempo reale}
+
+\subsection{Addestramento del modello}
+
+Il modello predittivo utilizzato nella pipeline streaming è stato addestrato offline, separatamente dal flusso Spark, tramite uno script Python dedicato. La scelta di eseguire l’addestramento in una fase distinta e non in tempo reale è dovuta principalmente al fatto che, durante l’elaborazione live di uno snapshot, non si dispone del \textit{target} finale, ovvero del risultato della partita su cui si basa la predizione. Il dato di riferimento (cioè quale squadra ha effettivamente vinto) diventa noto solo al termine dell’incontro, rendendo impossibile addestrare o aggiornare il modello dinamicamente durante il match.
+
+Oltre a questa motivazione strutturale, l’uso di \texttt{scikit-learn} al posto di Spark MLlib è stato dettato anche da altre considerazioni progettuali. Il dataset di training ha dimensioni contenute e può essere gestito interamente in memoria; inoltre, \texttt{scikit-learn} offre maggiore flessibilità nella costruzione della pipeline e nella validazione dei modelli. La serializzazione tramite \texttt{joblib} consente di salvare il classificatore in modo semplice e compatibile con Spark, facilitandone il riutilizzo in fase di scoring.
+
+Il file \texttt{trainer\_models.py} legge un dataset di snapshot etichettati, calcola una serie di feature avanzate, applica un preprocessing completo e addestra un modello di regressione logistica. Il modello viene infine salvato nella directory locale \texttt{spark/models/}, che è montata come volume nel container Spark. In questo modo, ogni nuova esecuzione della pipeline Spark può caricare automaticamente l’ultima versione aggiornata del modello senza ricalcolarlo.
+
+\subsection{Feature derivate}
+
+Per migliorare la capacità predittiva del modello, oltre alle variabili direttamente disponibili negli snapshot (come punteggio, set vinti e durata della partita), lo script di addestramento calcola una serie di \textit{feature derivate}, che sintetizzano informazioni più complesse e situazionali. Queste trasformazioni, definite nella funzione \texttt{add\_advanced\_features} dello script \texttt{trainer\_models.py}, si basano sull’osservazione di pattern ricorrenti nelle partite e hanno lo scopo di rendere il modello più sensibile al contesto dinamico del match.
+
+Tra le principali feature calcolate si trovano:
+\begin{itemize}
+  \item \texttt{set\_diff\_current}, che rappresenta la differenza punti dell’ultimo set giocato, estratta analizzando il campo testuale \texttt{set\_info};
+  \item \texttt{current\_set\_number}, ottenuta dal parsing del campo \texttt{match\_status}, per identificare il momento del match (inizio, set centrale, set decisivo);
+  \item \texttt{set\_importance}, un valore numerico (0.5 o 1.0) che quantifica quanto il set corrente possa influenzare l’esito finale della partita;
+  \item una serie di flag binari, come \texttt{flag\_3set\_severo\_home} o \texttt{flag\_critico\_base\_away}, che segnalano situazioni potenzialmente critiche per una delle due squadre, in base a punteggio e andamento;
+  \item \texttt{home\_win\_rate\_adj} e \texttt{away\_win\_rate\_adj}, che sono versioni modificate delle statistiche di win rate storiche, penalizzate dinamicamente se la squadra si trova in difficoltà nel momento presente;
+  \item \texttt{win\_rate\_diff}, una variabile riassuntiva che misura il differenziale tra le due versioni adattate dei win rate.
+\end{itemize}
+
+Tutte queste variabili vengono calcolate in \texttt{pandas} prima dell’addestramento vero e proprio, e sono incluse nella pipeline di preprocessing. Il loro utilizzo ha portato a un miglioramento significativo della stabilità e della precisione del modello rispetto all’utilizzo delle sole feature originali. Queste trasformazioni permettono infatti di modellare fattori latenti come il “momento psicologico” della gara o l’importanza strategica del set in corso, difficilmente rappresentabili con le sole statistiche grezze.
+
+
+\subsection{Applicazione del modello in streaming}
+
+Durante l’esecuzione della pipeline Spark, il modello salvato viene caricato in memoria e applicato in tempo reale agli snapshot provenienti da Kafka. Prima della predizione, i dati vengono preparati replicando in Spark le trasformazioni calcolate in fase di addestramento, comprese le feature derivate come \texttt{set\_diff\_current}, \texttt{set\_importance} e \texttt{win\_rate\_diff}.
+
+Per ogni snapshot viene generata una stima della probabilità di vittoria della squadra di casa, memorizzata nella colonna \texttt{predicted\_win}. Questa metrica rappresenta il livello di \textit{scoring} attualmente integrato nel sistema e riflette una valutazione probabilistica aggiornata del match, basata su dati live e statistiche storiche.
+
+
+\section{Indicizzazione degli snapshot su Elasticsearch}
+
+Completata la fase di \textit{scoring}, l’output finale viene scritto in tempo reale su Elasticsearch. Il \texttt{DataFrame} risultante, denominato \texttt{output\_df}, include sia le feature originali dello snapshot, sia la colonna \texttt{predicted\_win}, ottenuta tramite la funzione \texttt{extract\_prob}, che converte il vettore \texttt{probability} prodotto da Spark in un singolo valore numerico rappresentante la probabilità di vittoria per la squadra di casa:
+
+\begin{lstlisting}[language=Python]
+output_df = scored \
+    .withColumn("predicted_win", extract_prob(col("probability"))) \
+    .select(*final_cols)
+\end{lstlisting}
+
+Per l’indicizzazione viene utilizzato il connettore \texttt{elasticsearch-spark}, configurato tramite il metodo \texttt{writeStream}. I dati vengono scritti all’interno dell’indice \texttt{volleyball\_matches}, attraverso connessione diretta al nodo \texttt{elasticsearch-volley} sulla porta \texttt{9200}. La modalità \texttt{append} consente di aggiungere nuovi documenti senza sovrascrivere i precedenti.
+
+La configurazione prevede inoltre una directory di checkpoint \\ (\texttt{/tmp/spark-es-logreg-checkpoint}), fondamentale per garantire l’esecuzione \textit{exactly-once} e la tolleranza a guasti. Questo meccanismo permette al sistema di recuperare lo stato dello stream in caso di interruzione, evitando la duplicazione degli snapshot già processati.
+
+\newpage
+
+La scrittura è avviata con il seguente blocco di codice:
+
+\begin{lstlisting}[language=Python]
+es_query = output_df.writeStream \
+    .format("org.elasticsearch.spark.sql") \
+    .option("es.nodes", "elasticsearch-volley") \
+    .option("es.port", "9200") \
+    .option("es.resource", "volleyball_matches") \
+    .option("es.write.operation", "index") \
+    .option("checkpointLocation", "/tmp/spark-es-logreg-checkpoint") \
+    .outputMode("append") \
+    .start()
+
+es_query.awaitTermination()
+\end{lstlisting}
+
+Con questa fase si conclude la pipeline di elaborazione streaming: ogni snapshot ricevuto da Kafka viene arricchito con una predizione e subito reso disponibile in Elasticsearch da cui viene interrogato tramite API per essere visualizzato in modo semplice e intuitivo nel frontend.
+
+
 
 
 % ===============================

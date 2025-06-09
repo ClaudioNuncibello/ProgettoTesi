@@ -97,8 +97,8 @@ export default function Dashboard() {
   }
 
   // ==== SCEGLI QUALE USARE per la colonna sinistra ====
-  //const fetchMatches = fetchMatchesDev
-  const fetchMatches = fetchMatchesProd
+  const fetchMatches = fetchMatchesDev
+  //const fetchMatches = fetchMatchesProd
 
   // --- Fetch “Prod” per i dettagli (colonna di destra) ---
   async function fetchMatchDetails(matchId: number) {
