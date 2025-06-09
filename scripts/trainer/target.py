@@ -15,7 +15,7 @@ TIMEOUT     = 10  # secondi per la chiamata HTTP
 
 CSV_PATH   = '/Users/claudio/Documents/GitHub/ProgettoTesi/scripts/live_snapshots.csv'
 CACHE_PATH = '/Users/claudio/Documents/GitHub/ProgettoTesi/scripts/trainer/matches_cache.txt'
-OUT_PATH   = '/Users/claudio/Documents/GitHub/ProgettoTesi/scripts/trainer/trainer_model.csv'
+OUT_PATH   = '/Users/claudio/Documents/GitHub/ProgettoTesi/scripts/trainer/trainer_model_test.csv'
 
 # --- 1) Leggi tutti gli snapshot e uniforma match_id ---
 df = pd.read_csv(CSV_PATH)
