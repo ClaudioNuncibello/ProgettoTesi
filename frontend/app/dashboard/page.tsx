@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import { Star, RefreshCw } from "lucide-react"
+import PredictedWinGauge from "@/components/ui/PredictedWinGauge"
 
 const API_KEY = "2SRC4Sh4lkukveijWwruFw"
 const MATCHES_URL = "https://volleyball.sportdevs.com/matches?status_type=eq.live"
@@ -44,6 +45,70 @@ const testSportDevMatches: SportDevMatch[] = [
   { id: 100002, name: "Brazil vs Argentina", start_time: "2025-06-03T16:00:00Z", tournament_name:"VNL woman" },
   { id: 100003, name: "USA vs Poland", start_time: "2025-06-03T16:30:00Z", tournament_name:"VNL woman" },
 ]
+
+// --- Dati di fallback per i dettagli dei match (colonna di destra) ---
+const testDetailedMatches: Record<number, DetailedMatch> = {
+  100006: {
+    match_id: 100006,
+    home_team_id: 1,
+    away_team_id: 2,
+    home_score_total: 45,
+    away_score_total: 40,
+    home_sets_won: 2,
+    away_sets_won: 1,
+    score_diff: 5,
+    set_diff: 1,
+    home_current_score: "15",
+    away_current_score: "12",
+    set_info: "Set 1:15-12 | Set 2:10-15 | Set 3:20-18",
+    game_duration: "1h 05m",
+    match_status: "live",
+    home_win_rate_last5: 0.6,
+    away_win_rate_last5: 0.4,
+    head_to_head_win_rate_home: 0.3,
+    predicted_win: 0.366,
+  },
+  100002: {
+    match_id: 100002,
+    home_team_id: 3,
+    away_team_id: 4,
+    home_score_total: 30,
+    away_score_total: 32,
+    home_sets_won: 1,
+    away_sets_won: 2,
+    score_diff: -2,
+    set_diff: -1,
+    home_current_score: "12",
+    away_current_score: "15",
+    set_info: "Set 1:12-15 | Set 2:15-10 | Set 3:8-15",
+    game_duration: "50m",
+    match_status: "live",
+    home_win_rate_last5: 0.8,
+    away_win_rate_last5: 0.2,
+    head_to_head_win_rate_home: 0.0,
+    predicted_win: 0.342,
+  },
+  100003: {
+    match_id: 100003,
+    home_team_id: 5,
+    away_team_id: 6,
+    home_score_total: 50,
+    away_score_total: 48,
+    home_sets_won: 3,
+    away_sets_won: 2,
+    score_diff: 2,
+    set_diff: 1,
+    home_current_score: "20",
+    away_current_score: "18",
+    set_info: "Set 1:25-20 | Set 2:20-25 | Set 3:25-23 | Set 4:22-25 | Set 5:20-18",
+    game_duration: "1h 20m",
+    match_status: "live",
+    home_win_rate_last5: 0.7,
+    away_win_rate_last5: 0.3,
+    head_to_head_win_rate_home: 0.5,
+    predicted_win: 0.75,
+  },
+}
 
 export default function Dashboard() {
   // Stato per la colonna sinistra
@@ -97,11 +162,11 @@ export default function Dashboard() {
   }
 
   // ==== SCEGLI QUALE USARE per la colonna sinistra ====
-  //const fetchMatches = fetchMatchesDev
-  const fetchMatches = fetchMatchesProd
+  const fetchMatches = fetchMatchesDev
+  //const fetchMatches = fetchMatchesProd
 
   // --- Fetch “Prod” per i dettagli (colonna di destra) ---
-  async function fetchMatchDetails(matchId: number) {
+  async function fetchMatchDetailsProd(matchId: number) {
     try {
       const res = await fetch(DETAIL_URL(matchId))
       if (!res.ok) throw new Error(`Status ${res.status}`)
@@ -114,6 +179,22 @@ export default function Dashboard() {
       // Gestione errori silenziosa per dettagli
     }
   }
+
+  // Fetch Prod per i dettagli (colonna di destra)
+  async function fetchMatchDetailsDev(matchId: number) {
+    try {
+      const res = await fetch(DETAIL_URL(matchId))
+      if (!res.ok) throw new Error(`Status ${res.status}`)
+      const data: DetailedMatch = await res.json()
+      setDetailedMatches((prev) => ({ ...prev, [matchId]: data }))
+    } catch {
+      // fallback sui dati statici
+      setDetailedMatches((prev) => ({ ...prev, [matchId]: testDetailedMatches[matchId] || prev[matchId] }))
+    }
+  }
+
+  // ==== SCEGLI QUALE USARE per la colonna destra ====
+  const fetchMatchDetails = fetchMatchDetailsDev
 
   useEffect(() => {
     fetchMatches()
@@ -268,7 +349,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Colonna di destra */}
+        {/* COLONNA DESTRA */}
         <div className="md:w-3/4 h-full flex flex-col bg-background">
           <div className="flex-1 overflow-y-auto">
             <div className="p-6 h-full">
@@ -303,242 +384,190 @@ export default function Dashboard() {
                     return (
                       <div
                         key={match.id}
-                        className="w-full border border-border rounded-xl bg-card p-6 shadow-sm hover:shadow-md transition-shadow"
+                        className="relative w-full h-[650px] border border-border rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow"
                       >
-                        {/* Titolo e stato */}
-                        <div className="flex justify-between items-start mb-4">
-                          <h3 className="text-xl font-bold font-heading">{match.name}</h3>
-                          <span
-                            className="px-3 py-1 rounded-full text-xs font-medium bg-volleyball-orange/10 text-volleyball-orange"
-                          >
-                            {getMatchStatus()}
-                          </span>
-                        </div>
+                        {/* Sfondo campo */}
+                        <div
+                          className="absolute inset-0 bg-center bg-no-repeat bg-cover"
+                          style={{ backgroundImage: "url('/campoPallavolo.png')" }}
+                        />
 
-                        {/* Info base */}
-                        <div className="text-sm text-muted-foreground mb-6 space-y-1">
-                          <p>
-                            Torneo: <span className="text-foreground"> {match.tournament_name} </span>
-                          </p>
-                          <p>
-                            inizio partita:{" "}
-                            <span className="text-foreground">
-                              {formatMatchDate(match.start_time)}
-                            </span>
-                          </p>
-                        </div>
-
-                        {/* ─────────────────────────────────────────────────────────────── */}
-                        {/* Mostra tabella  */}
                         {detailed ? (
                           <>
-                            {/* ─── 1) Flex container: Tabella (a sinistra) + Metriche (a destra) ─── */}
-                            <div className="flex gap-16 items-start">
-                              {/* ───────────────────────── Tabella ───────────────────────── */}
-                              <div className="flex-none w-1/3 bg-white rounded-lg overflow-hidden shadow-lg">
-                                {/* Header tabella */}
+                            {/* Tabellone “TV” (top-left) */}
+                            <div className="absolute top-4 left-4 bg-white/80 backdrop-blur-sm rounded-lg p-3 shadow">
+                              {/* Header con HOME e i titoli dei set */}
+                              <div
+                                className={`
+                                  grid ${gridColsClass} gap-2 text-xs font-semibold text-gray-700
+                                `}
+                              >
+                                <div className="py-1 px-2 text-center font-medium">HOME</div>
+                                {scores.map((_, idx) => (
+                                  <div key={idx} className="py-1 px-2 text-center">
+                                    {`Set ${idx + 1}`}
+                                  </div>
+                                ))}
+                              </div>
+
+                              {/* Riga HOME con i punteggi */}
+                              <div
+                                className={`
+                                  grid ${gridColsClass} gap-2 text-sm font-bold text-center
+                                  border-t border-border mt-1
+                                `}
+                              >
+                                <div className="py-1 px-2 font-medium truncate"> {homeName} </div>
+                                {scores.map((s, idx) => (
+                                  <div
+                                    key={idx}
+                                    className={s.home > s.away ? "text-green-600" : "text-gray-800"}
+                                  >
+                                    {s.home}
+                                  </div>
+                                ))}
+                              </div>
+
+                              {/* Riga AWAY con i punteggi */}
+                              <div
+                                className={`
+                                  grid ${gridColsClass} gap-2 text-sm font-bold text-center
+                                `}
+                              >
+                                <div className="py-1 px-2 font-medium truncate"> {awayName} </div>
+                                {scores.map((s, idx) => (
+                                  <div
+                                    key={idx}
+                                    className={s.away > s.home ? "text-green-600" : "text-gray-800"}
+                                  >
+                                    {s.away}
+                                  </div>
+                                ))}
+                              </div>
+
+                              {/* Info torneo e data sotto il tabellone */}
+                              <div className="mt-2 text-[10px] text-gray-600">
+                                <div>
+                                  Torneo:{" "}
+                                  <span className="font-medium text-gray-800">
+                                    {match.tournament_name}
+                                  </span>
+                                </div>
+                                <div>
+                                  Inizio:{" "}
+                                  <span className="font-medium text-gray-800">
+                                    {formatMatchDate(match.start_time)}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+
+                            {/* Stato match top-right */}
+                            <span
+                              className="absolute top-4 right-4 px-3 py-1 rounded-full text-xs font-medium bg-volleyball-orange/10 text-volleyball-orange"
+                            >
+                              {getMatchStatus()}
+                            </span>
+
+                            {/* Home ultimi 5 – bottom-left */}
+                            <div className="absolute bottom-4 left-4 bg-white/80 backdrop-blur-sm rounded-lg p-3 shadow">
+                              <span className="block text-sm font-medium text-[#0A1931]">
+                                Win score last 5 ({homeName})
+                              </span>
+                              <div className="flex items-center gap-1 mt-1">
+                                {Array.from({ length: 5 }).map((_, idx) => {
+                                  const wins = Math.round(detailed.home_win_rate_last5 * 5)
+                                  const win = idx < wins
+                                  return (
+                                    <div
+                                      key={idx}
+                                      className={`w-6 h-6 rounded-md flex items-center justify-center text-xs font-semibold text-white ${
+                                        win ? "bg-green-600" : "bg-red-600"
+                                      }`}
+                                    >
+                                      {win ? "V" : "P"}
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            </div>
+
+                            {/* Away ultimi 5 – bottom-right */}
+                            <div className="absolute bottom-4 right-4 bg-white/80 backdrop-blur-sm rounded-lg p-3 shadow">
+                              <span className="block text-sm font-medium text-[#0A1931]">
+                                Win score last 5 ({awayName})
+                              </span>
+                              <div className="flex items-center gap-1 mt-1">
+                                {Array.from({ length: 5 }).map((_, idx) => {
+                                  const wins = Math.round(detailed.away_win_rate_last5 * 5)
+                                  const win = idx < wins
+                                  return (
+                                    <div
+                                      key={idx}
+                                      className={`w-6 h-6 rounded-md flex items-center justify-center text-xs font-semibold text-white ${
+                                        win ? "bg-green-600" : "bg-red-600"
+                                      }`}
+                                    >
+                                      {win ? "V" : "P"}
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            </div>
+
+                            {/* Head-to-Head – bottom-center */}
+                            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-1/3 bg-white/80 backdrop-blur-sm rounded-lg p-3 shadow">
+                              <span className="block text-sm font-medium text-[#0A1931]">
+                                Head-to-Head Win Rate
+                              </span>
+                              <div className="w-full h-3 flex rounded-full overflow-hidden bg-gray-200 mt-1">
                                 <div
-                                  className={`
-                                    grid ${gridColsClass} bg-gray-100 text-gray-700 text-xs font-semibold
-                                    border-b border-border
-                                  `}
-                                >
-                                  <div className="py-2 px-2 text-center">Squadra</div>
-                                  {setsArr.map((_, idx) => {
-                                    const isCurrent = idx === currentSetIndex
-                                    return (
-                                      <div
-                                        key={idx}
-                                        className={`
-                                          py-2 px-2 text-center
-                                          ${isCurrent ? "text-volleyball-orange" : ""}
-                                        `}
-                                      >
-                                        {isCurrent ? "Set corrente" : `Set ${idx + 1}`}
-                                        {isCurrent && <span className="ml-1">●</span>}
-                                      </div>
-                                    )
-                                  })}
-                                </div>
-                                {/* Corpo tabella */}
-                                <div className="divide-y divide-border">
-                                  {/* Riga squadra “Casa” */}
-                                  <div className={`grid ${gridColsClass} bg-white`}>
-                                    <div className="py-2 px-2 font-medium text-sm truncate text-center">
-                                      {homeName}
-                                    </div>
-                                    {scores.map((s, idx) => {
-                                      const won = s.home > s.away
-                                      const isCurrent = idx === currentSetIndex
-                                      return (
-                                        <div
-                                          key={idx}
-                                          className={`
-                                            py-2 px-2 text-center text-sm font-bold
-                                            ${won ? "text-green-600" : "text-gray-800"}
-                                            ${isCurrent ? "text-volleyball-orange" : ""}
-                                          `}
-                                        >
-                                          {s.home}
-                                        </div>
-                                      )
-                                    })}
-                                  </div>
-                                  {/* Riga squadra “Ospiti” */}
-                                  <div className={`grid ${gridColsClass} bg-white`}>
-                                    <div className="py-2 px-2 font-medium text-sm truncate text-center">
-                                      {awayName}
-                                    </div>
-                                    {scores.map((s, idx) => {
-                                      const won = s.away > s.home
-                                      const isCurrent = idx === currentSetIndex
-                                      return (
-                                        <div
-                                          key={idx}
-                                          className={`
-                                            py-2 px-2 text-center text-sm font-bold
-                                            ${won ? "text-green-600" : "text-gray-800"}
-                                            ${isCurrent ? "text-volleyball-orange" : ""}
-                                          `}
-                                        >
-                                          {s.away}
-                                        </div>
-                                      )
-                                    })}
-                                  </div>
-                                </div>
+                                  className="h-full"
+                                  style={{
+                                    width: `${detailed.head_to_head_win_rate_home * 100}%`,
+                                    backgroundColor: "#1E3A8A",
+                                  }}
+                                />
+                                <div
+                                  className="h-full"
+                                  style={{
+                                    width: `${(1 - detailed.head_to_head_win_rate_home) * 100}%`,
+                                    backgroundColor: "#2563EB",
+                                  }}
+                                />
                               </div>
-
-                              {/* ─── 2) Colonna di destra: Forma ultimi 5 & Head-to-Head ─── */}
-                              <div className="flex-1 mt-0 space-y-6">
-                                {/* ── 2.1) Blocco “Forma ultimi 5” ── */}
-                                <div className="inline-grid grid-cols-2 gap-10">
-                                  {/* Home (ultimi 5) */}
-                                  <div className="space-y-1">
-                                    <span className="block text-sm font-medium text-[#0A1931]">
-                                      Home (ultimi 5)
-                                    </span>
-                                    <div className="flex items-center gap-1">
-                                      {Array.from({ length: 5 }).map((_, idx) => {
-                                        const winsCount = Math.round(detailed.home_win_rate_last5 * 5)
-                                        const isWin = idx < winsCount
-                                        return (
-                                          <div
-                                            key={idx}
-                                            className={`
-                                              w-6 h-6 rounded-md flex items-center justify-center
-                                              text-xs font-semibold text-white
-                                              ${isWin ? "bg-green-600" : "bg-red-600"}
-                                            `}
-                                          >
-                                            {isWin ? "V" : "P"}
-                                          </div>
-                                        )
-                                      })}
-                                    </div>
-                                  </div>
-
-                                  {/* Away (ultimi 5) */}
-                                  <div className="space-y-1">
-                                    <span className="block text-sm font-medium text-[#0A1931]">
-                                      Away (ultimi 5)
-                                    </span>
-                                    <div className="flex items-center gap-1">
-                                      {Array.from({ length: 5 }).map((_, idx) => {
-                                        const winsCount = Math.round(detailed.away_win_rate_last5 * 5)
-                                        const isWin = idx < winsCount
-                                        return (
-                                          <div
-                                            key={idx}
-                                            className={`
-                                              w-6 h-6 rounded-md flex items-center justify-center
-                                              text-xs font-semibold text-white
-                                              ${isWin ? "bg-green-600" : "bg-red-600"}
-                                            `}
-                                          >
-                                            {isWin ? "V" : "P"}
-                                          </div>
-                                        )
-                                      })}
-                                    </div>
-                                  </div>
-                                </div>
-
-                                {/* ── 2.2) Head-to-Head Win Rate ── */}
-                                <div className=" w-1/2 space-y-1">
-                                  <span className="block text-sm font-medium text-[#0A1931]">
-                                    Head-to-Head Win Rate
-                                  </span>
-                                  <div className="w-full h-3 flex rounded-full overflow-hidden bg-gray-200">
-                                    <div
-                                      className="h-full"
-                                      style={{
-                                        width: `${detailed.head_to_head_win_rate_home * 100}%`,
-                                        backgroundColor: "#22C55E",
-                                      }}
-                                    />
-                                    <div
-                                      className="h-full"
-                                      style={{
-                                        width: `${(1 - detailed.head_to_head_win_rate_home) * 100}%`,
-                                        backgroundColor: "#EF4444",
-                                      }}
-                                    />
-                                  </div>
-                                  <div className="flex justify-between text-xs text-[#0A1931]">
-                                    <span>
-                                      Casa{" "}
-                                      {(detailed.head_to_head_win_rate_home * 100).toFixed(1)}%
-                                    </span>
-                                    <span>
-                                      Ospiti{" "}
-                                      {((1 - detailed.head_to_head_win_rate_home) * 100).toFixed(1)}%
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* ─────────────────────────────────────────────────────────────── */}
-                            {/* ─── 3) Predicted Win (sotto il flex container) ─── */}
-                            <div className="mt-6">
-                              <div className="w-full space-y-1">
-                                <span className="block text-sm font-medium text-[#0A1931]">
-                                  Predicted Win
+                              <div className="flex justify-between text-xs text-[#0A1931] mt-1">
+                                <span>
+                                  {homeName} {(detailed.head_to_head_win_rate_home * 100).toFixed(1)}%
                                 </span>
-                                <div className="w-full h-3 flex rounded-full overflow-hidden bg-gray-200">
-                                  <div
-                                    className="h-full"
-                                    style={{
-                                      width: `${detailed.predicted_win * 100}%`,
-                                      backgroundColor: "#F55353",
-                                    }}
-                                  />
-                                  <div
-                                    className="h-full"
-                                    style={{
-                                      width: `${(1 - detailed.predicted_win) * 100}%`,
-                                      backgroundColor: "#FFA500",
-                                    }}
-                                  />
-                                </div>
-                                <div className="flex justify-between text-xs text-[#0A1931]">
-                                  <span>
-                                    Casa {(detailed.predicted_win * 100).toFixed(1)}%
-                                  </span>
-                                  <span>
-                                    Ospiti{" "}
-                                    {((1 - detailed.predicted_win) * 100).toFixed(1)}%
-                                  </span>
-                                </div>
+                                <span>
+                                  {awayName}{" "}
+                                  {((1 - detailed.head_to_head_win_rate_home) * 100).toFixed(1)}%
+                                </span>
                               </div>
                             </div>
+
+
+                            {/* ───  Predicted Win  ─── */}
+                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+                              <PredictedWinGauge
+                                value={detailed.predicted_win}
+                                homeName={homeName}
+                                awayName={awayName}
+                                size={300}
+                                strokeWidth={28}
+                              />
+                            </div>
+
+
                           </>
                         ) : (
                           <div className="text-center text-sm text-gray-500">
                             Caricamento dettagli…
                           </div>
                         )}
+
                       </div>
                     )
                   })}
