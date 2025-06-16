@@ -5,7 +5,7 @@ import json
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import (
     col, from_json, date_format, to_timestamp,
-    udf
+    udf,lit
 )
 from pyspark.sql.types import (
     StructType, StructField,
@@ -16,6 +16,7 @@ from pyspark.ml.feature import (
     Imputer, StringIndexer, OneHotEncoder, VectorAssembler, StandardScaler
 )
 from pyspark.ml.classification import LogisticRegression
+
 
 # ------------------ Spark Session ------------------
 spark = SparkSession.builder \
@@ -377,6 +378,13 @@ stream_feat = (
                     col("set_importance")
                 ))
     .withColumn("win_rate_diff", col("home_win_rate_adj") - col("away_win_rate_adj"))
+
+    # ←––––– alpha sulle storiche –––––───────────┐
+    .withColumn("home_win_rate_last5", col("home_win_rate_last5") * lit(0.5))
+    .withColumn("away_win_rate_last5", col("away_win_rate_last5") * lit(0.5))
+    .withColumn("head_to_head_win_rate_home",
+                col("head_to_head_win_rate_home") * lit(0.5))
+    # └───────────────────────────────────────────────────────────────────────┘
 )
 
 # ------------------ Applica il modello ------------------

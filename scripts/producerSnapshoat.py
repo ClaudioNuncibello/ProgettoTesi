@@ -8,9 +8,9 @@ from kafka import KafkaProducer
 import json
 
 # Config
-API_KEY = "AymenURP9kWkgEatcBdcYA"
+#API_KEY = "AymenURP9kWkgEatcBdcYA"
 #API_KEY = "Zc6NKDUI70eCDcwwgxj_kw"
-#API_KEY = "2SRC4Sh4lkukveijWwruFw"
+API_KEY = "2SRC4Sh4lkukveijWwruFw"
 #API_KEY = "RLrC2K7dukWrUVsacfcHyg"
 
 MATCHES_URL = "https://volleyball.sportdevs.com/matches?status_type=eq.live"
@@ -190,8 +190,8 @@ def collect_snapshot_data():
         set_diff = home_sets - away_sets
         match_status = match.get("status", {}).get("reason", "")
         current_set = get_current_set_info(match_status, home_score_map, away_score_map)
-        home_current_score = home_score_map.get(f"period_{current_set}", "?")
-        away_current_score = away_score_map.get(f"period_{current_set}", "?")
+        home_current_score = home_score_map.get(f"period_{current_set}", 0)
+        away_current_score = away_score_map.get(f"period_{current_set}", 0)
         set_info = format_set_scores(home_score_map, away_score_map, current_set)
 
         duration = match.get("duration", 0)
@@ -264,10 +264,10 @@ if __name__ == "__main__":
     LAST_SCORES = {}
 
     # Se vuoi ripristinare il controllo Kafka
-    #if not check_kafka_connection():
-        #print("❌ Kafka non è disponibile. Uscita dal programma.")
-        #exit(1)
-    #producer = create_producer()
+    if not check_kafka_connection():
+        print("❌ Kafka non è disponibile. Uscita dal programma.")
+        exit(1)
+    producer = create_producer()
 
     try:
         while True:
@@ -278,7 +278,6 @@ if __name__ == "__main__":
                 # Se non ci sono partite live, esco
                 if not snapshots:
                     print("❌ Nessuna partita live in corso...")
-                    break
 
                 # Filtro solo gli snapshot con punteggio cambiato
                 to_write = []
@@ -301,7 +300,7 @@ if __name__ == "__main__":
                     print(f"✅ Snapshot aggiornato alle {datetime.now():%H:%M:%S} con {len(df)} nuove righe. "
                           f"Match ID salvati: {nuovi_ids}")
 
-                    #send_to_kafka(producer, to_write)
+                    send_to_kafka(producer, to_write)
                 else:
                     print(f"⏭️ {datetime.now():%H:%M:%S} nessun cambiamento di punteggio")
 
@@ -312,6 +311,6 @@ if __name__ == "__main__":
 
     finally:
         # Se si usa Kafka, decommenta
-        #print("🛑 Chiusura Kafka producer...")
-        #producer.close()
+        print("🛑 Chiusura Kafka producer...")
+        producer.close()
         print("fine programma")

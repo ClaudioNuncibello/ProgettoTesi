@@ -329,7 +329,7 @@ export default function Dashboard() {
                         </div>
 
                         {/* ─────────────────────────────────────────────────────────────── */}
-                        {/* Mostra tabella + 2 barre (Forma ultimi 5 + Head-to-Head) solo se 'detailed' è definito */}
+                        {/* Mostra tabella  */}
                         {detailed ? (
                           <>
                             {/* ─── 1) Flex container: Tabella (a sinistra) + Metriche (a destra) ─── */}

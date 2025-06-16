@@ -14,7 +14,7 @@ import joblib
 
 from sklearn.linear_model import LogisticRegression
 from sklearn.impute import SimpleImputer
-from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.preprocessing import OneHotEncoder, StandardScaler, FunctionTransformer
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 
@@ -29,6 +29,7 @@ def parse_duration(s: str) -> float:
     secs = float(sec.group(1)) if sec else 0.0
     return mins * 60.0 + secs
 
+
 def compute_current_set_number(match_status: str) -> int:
     if not isinstance(match_status, str):
         return 1
@@ -40,6 +41,7 @@ def compute_current_set_number(match_status: str) -> int:
     if "2nd" in s: return 2
     if "3rd" in s: return 3
     return 1
+
 
 def extract_current_set_diff(set_info: str, overall_diff: float) -> float:
     if not isinstance(set_info, str):
@@ -55,12 +57,14 @@ def extract_current_set_diff(set_info: str, overall_diff: float) -> float:
     except:
         return overall_diff
 
+
 def compute_set_importance(hs: float, aw: float, cs: int) -> float:
     if cs == 3 and hs == 1 and aw == 1:
         return 1.0
     if cs == 2 and ((hs == 1 and aw == 0) or (aw == 1 and hs == 0)):
         return 1.0
     return 0.5
+
 
 def compute_flags(df: pd.DataFrame) -> pd.DataFrame:
     df["flag_3set_severo_home"] = (
@@ -79,6 +83,7 @@ def compute_flags(df: pd.DataFrame) -> pd.DataFrame:
     ).astype(int)
     return df
 
+
 def compute_home_win_rate_adj(row) -> float:
     base = row["home_win_rate_last5"]
     sd = row["set_diff_current"]
@@ -91,6 +96,7 @@ def compute_home_win_rate_adj(row) -> float:
         adj = base
     return adj * row["set_importance"]
 
+
 def compute_away_win_rate_adj(row) -> float:
     base = row["away_win_rate_last5"]
     sd = row["set_diff_current"]
@@ -102,6 +108,7 @@ def compute_away_win_rate_adj(row) -> float:
     else:
         adj = base
     return adj * row["set_importance"]
+
 
 def add_advanced_features(df: pd.DataFrame) -> pd.DataFrame:
     df["set_diff_current"] = df.apply(
@@ -123,10 +130,17 @@ def add_advanced_features(df: pd.DataFrame) -> pd.DataFrame:
     df["win_rate_diff"] = df["home_win_rate_adj"] - df["away_win_rate_adj"]
     return df
 
+# Funzione top-level per attenuazione
+def attenuate(X, alpha):
+    return X * alpha
+
+
 # ------------------ Main training script ------------------
 
 def main():
-    df = pd.read_csv("/Users/claudio/Documents/GitHub/ProgettoTesi/scripts/trainer/trainer_model.csv")
+    df = pd.read_csv(
+        "/Users/claudio/Documents/GitHub/ProgettoTesi/scripts/trainer/trainer_model.csv"
+    )
 
     df["game_duration"] = df["game_duration"].map(parse_duration)
     df = df[df["target_win"].notna()]
@@ -145,18 +159,32 @@ def main():
     ]
     cat_cols = ["home_team_id", "away_team_id"]
 
-    X = df[num_cols + cat_cols].copy()
-    y = df["target_win"].astype(int)
+    alpha = 0.5
+    hist_cols = [
+        "home_win_rate_last5",
+        "away_win_rate_last5",
+        "head_to_head_win_rate_home"
+    ]
+    other_num_cols = [c for c in num_cols if c not in hist_cols]
 
-    numeric_transformer = Pipeline(steps=[
+    main_transformer = Pipeline(steps=[
         ("imputer", SimpleImputer(strategy="median")),
         ("scaler", StandardScaler())
     ])
-    categorical_transformer = OneHotEncoder(handle_unknown="ignore", sparse_output=False)
+    hist_transformer = Pipeline(steps=[
+        ("imputer", SimpleImputer(strategy="median")),
+        ("scaler", StandardScaler()),
+        ("attenuator", FunctionTransformer(func=attenuate, kw_args={'alpha': alpha}))
+    ])
+
+    categorical_transformer = OneHotEncoder(
+        handle_unknown="ignore", sparse_output=False
+    )
 
     preprocessor = ColumnTransformer(
         transformers=[
-            ("num", numeric_transformer, num_cols),
+            ("main_num", main_transformer, other_num_cols),
+            ("hist_num", hist_transformer, hist_cols),
             ("cat", categorical_transformer, cat_cols),
         ],
         remainder="drop"
@@ -164,12 +192,19 @@ def main():
 
     clf = Pipeline(steps=[
         ("preproc", preprocessor),
-        ("lr", LogisticRegression(penalty="l2", C=1.0, max_iter=1000, random_state=42))
+        ("lr", LogisticRegression(
+            penalty="l2", C=1.0, max_iter=1000, random_state=42
+        ))
     ])
 
-    clf.fit(X, y)
+    X = df[num_cols + cat_cols].copy()
+    y = df["target_win"].astype(int)
 
-    joblib.dump(clf, "/Users/claudio/Documents/GitHub/ProgettoTesi/spark/models/model.joblib")
+    clf.fit(X, y)
+    joblib.dump(
+        clf,
+        "/Users/claudio/Documents/GitHub/ProgettoTesi/spark/models/model.joblib"
+    )
     print("✅ Modello addestrato e salvato in: model.joblib")
 
 if __name__ == "__main__":
