@@ -5,10 +5,13 @@ import Link from "next/link"
 import { Star, RefreshCw, ChevronDown, ChevronUp } from "lucide-react"
 import PredictedWinGauge from "@/components/ui/PredictedWinGauge"
 import MatchSelect from "@/components/ui/MatchSelect";
+import { PredictedWinChart } from "@/components/ui/PredictedWinChart";
 
-const API_KEY = "2SRC4Sh4lkukveijWwruFw"
+
+const API_KEY = "RLrC2K7dukWrUVsacfcHyg"
 const MATCHES_URL = "https://volleyball.sportdevs.com/matches?status_type=eq.live"
 const DETAIL_URL = (matchId: number) => `http://localhost:8000/match/${matchId}`
+const SETS_PRED_URL = (matchId: number) => `http://localhost:8000/matches/${matchId}/sets-predictions`;
 
 // --- Tipo per i soli match SportDevs (colonna di sinistra) ---
 interface SportDevMatch {
@@ -38,6 +41,21 @@ interface DetailedMatch {
   away_win_rate_last5: number
   head_to_head_win_rate_home: number
   predicted_win: number
+}
+
+export interface SetInfo {
+  timestamp: string;
+  set_info: string;
+}
+
+export interface Prediction {
+  timestamp: string;
+  predicted_win: number;
+}
+
+export interface SetsAndPredictions {
+  sets: SetInfo[];
+  predictions: Prediction[];
 }
 
 // --- Dati di fallback per la colonna di sinistra ---
@@ -126,6 +144,9 @@ export default function Dashboard() {
   const [activeFavorite, setActiveFavorite] = useState<number | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
 
+  // Stato per i sets+predictions del match attivo
+  const [setsAndPred, setSetsAndPred] = useState<Record<number, SetsAndPredictions>>({});
+
   // Fetch fallback per la lista SportDevs (colonna sinistra)
   async function fetchMatchesDev() {
     setError(null)
@@ -193,11 +214,27 @@ export default function Dashboard() {
     }
   }
 
+  // Funzione di fetch per predizioni temporali
+  async function fetchSetsAndPredictions(matchId: number) {
+    try {
+      const res = await fetch(SETS_PRED_URL(matchId));
+      if (!res.ok) throw new Error(`Status ${res.status}`);
+      const json = (await res.json()) as SetsAndPredictions;
+      setSetsAndPred((prev) => ({
+        ...prev,
+        [matchId]: json,
+      }));
+    } catch (err) {
+      console.error("Errore fetch sets+pred:", err);
+    }
+  }
+
   // Scegli quale fetch usare
-  const fetchMatches = fetchMatchesDev
-  const fetchMatchDetails = fetchMatchDetailsDev
-  //const fetchMatches = fetchMatchesProd
-  //const fetchMatchDetails = fetchMatchDetailsProd
+  //const fetchMatches = fetchMatchesDev
+  const fetchMatches = fetchMatchesProd
+
+  //const fetchMatchDetails = fetchMatchDetailsDev
+  const fetchMatchDetails = fetchMatchDetailsProd
 
   useEffect(() => {
     fetchMatches()
@@ -207,7 +244,11 @@ export default function Dashboard() {
   useEffect(() => {
     const intervall = setInterval(() => {
       Object.keys(detailedMatches).forEach((key) => {
-        fetchMatchDetails(Number(key))
+        const matchId = Number(key);
+        // ricarica i dettagli
+        fetchMatchDetails(matchId);
+        // e ricarica le predizioni
+        fetchSetsAndPredictions(matchId);
       })
     }, 10000)
     return () => clearInterval(intervall)
@@ -218,6 +259,7 @@ export default function Dashboard() {
     if (favoriteMatches.length > 0 && !favoriteMatches.includes(activeFavorite!)) {
       setActiveFavorite(favoriteMatches[0])
       fetchMatchDetails(favoriteMatches[0])
+      fetchSetsAndPredictions(favoriteMatches[0])
     } else if (favoriteMatches.length === 0) {
       setActiveFavorite(null)
     }
@@ -332,24 +374,38 @@ export default function Dashboard() {
             <div className="p-6 h-full">
               {favoriteMatches.length > 0 ? (
                 <div className="space-y-6">
-                  <div className="mb-4">
-                  <MatchSelect
-                    matches={favoriteMatches.map((id) => matches.find((m) => m.id === id)!)}
-                    activeFavorite={activeFavorite}
-                    onChange={(id) => {
-                      setActiveFavorite(id);
-                      fetchMatchDetails(id);
-                    }}
-                  />
+
+                  <div className="relative space-y-6">
+
+                      {activeFavorite !== null && detailedMatches[activeFavorite] ? (
+                        <MatchCard
+                          match={matches.find((m) => m.id === activeFavorite)!}
+                          detailed={detailedMatches[activeFavorite]}
+                          onSelectMatch={(id) => {
+                            setActiveFavorite(id)
+                            fetchMatchDetails(id)
+                          }}
+                          favoriteMatches={favoriteMatches
+                            .map((id) => matches.find((m) => m.id === id))
+                            .filter(Boolean) as SportDevMatch[]}
+                          activeFavorite={activeFavorite}
+                        />
+
+                      ) : (
+                        <p className="text-center text-sm text-gray-500">Caricamento dettagli…</p>
+                      )}
+
+                      {activeFavorite !== null && setsAndPred[activeFavorite] ? (
+                        <div className="p-4 bg-white rounded-lg shadow">
+                          <PredictedWinChart
+                            sets={setsAndPred[activeFavorite].sets}
+                            predictions={setsAndPred[activeFavorite].predictions}
+                          />
+                        </div>
+                      ) : (<p className="text-center text-sm text-gray-500">Caricamento dettagli…</p>) }
+
                   </div>
-                  {activeFavorite !== null && detailedMatches[activeFavorite] ? (
-                    <MatchCard
-                      match={matches.find((m) => m.id === activeFavorite)!}
-                      detailed={detailedMatches[activeFavorite]}
-                    />
-                  ) : (
-                    <p className="text-center text-sm text-gray-500">Caricamento dettagli…</p>
-                  )}
+
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center h-full">
@@ -370,7 +426,8 @@ export default function Dashboard() {
   )
 }
 
-function MatchCard({ match, detailed }: { match: SportDevMatch; detailed: DetailedMatch }) {
+function MatchCard({ match, detailed, onSelectMatch, favoriteMatches, activeFavorite, }: 
+  { match: SportDevMatch; detailed: DetailedMatch; onSelectMatch: (id: number) => void; favoriteMatches: SportDevMatch[]; activeFavorite: number;}) {
   const [homeName = "Casa", awayName = "Ospiti"] = match.name.split(" vs ")
   const setsArr = detailed.set_info.split(" | ")
   const totalSets = setsArr.length
@@ -383,9 +440,20 @@ function MatchCard({ match, detailed }: { match: SportDevMatch; detailed: Detail
   })
 
   return (
-    <div className="relative w-full h-[650px] border border-border rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+    
+    <div className="relative w-full h-[700px] pt-0 border border-border overflow-hidden rounded-xl shadow-sm hover:shadow-md transition-shadow">
+
+      <div className="absolute top-3 right-4 z-20">
+        <MatchSelect
+         matches={favoriteMatches}
+         activeFavorite={activeFavorite}
+         onChange={onSelectMatch}
+        />
+      </div>
+
       {/* Sfondo campo */}
       <div className="absolute inset-0 bg-center bg-no-repeat bg-cover" style={{ backgroundImage: "url('/campoPallavolo.png')" }} />
+
 
       {/* Tabellone TV */}
       <div className="absolute top-4 left-4 bg-white/80 backdrop-blur-sm rounded-lg p-3 shadow">
@@ -417,8 +485,6 @@ function MatchCard({ match, detailed }: { match: SportDevMatch; detailed: Detail
         </div>
       </div>
 
-      {/* Stato match */}
-      <span className="absolute top-4 right-4 px-3 py-1 rounded-full text-xs font-medium bg-volleyball-orange/10 text-volleyball-orange">IN CORSO</span>
 
       {/* Home ultimi 5 */}
       <div className="absolute bottom-4 left-4 bg-white/80 backdrop-blur-sm rounded-lg p-3 shadow">

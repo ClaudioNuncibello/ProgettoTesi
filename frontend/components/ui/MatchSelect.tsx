@@ -1,36 +1,46 @@
-import { useState } from "react";
-import { Listbox, Transition } from "@headlessui/react";
-import { ChevronDown, Check } from "lucide-react";
+// components/ui/MatchSelect.tsx
+"use client"
 
-interface Match {
-  id: number;
-  name: string;
-  start_time: string;
+import { Fragment } from "react"
+import { Listbox, Transition } from "@headlessui/react"
+import { ChevronDown, Check } from "lucide-react"
+
+export interface Match {
+  id: number
+  name: string
+  start_time: string
+  tournament_name: string
 }
 
 interface MatchSelectProps {
-  matches: Match[];
-  activeFavorite: number | null;
-  onChange: (matchId: number) => void;
+  matches: Match[]
+  activeFavorite: number | null
+  onChange: (matchId: number) => void
 }
 
-const MatchSelect = ({ matches, activeFavorite, onChange }: MatchSelectProps) => {
-  const activeMatch = matches.find((m) => m.id === activeFavorite) || matches[0];
+export default function MatchSelect({
+  matches,
+  activeFavorite,
+  onChange,
+}: MatchSelectProps) {
+  // Selezionato
+  const selected =
+    matches.find((m) => m.id === activeFavorite) || matches[0]
 
   return (
-    <div className="relative w-1/6">
-      <Listbox value={activeMatch.id} onChange={onChange}>
-        <div className="relative">
-          <Listbox.Button className="relative cursor-pointer rounded-lg border border-border bg-card p-3 pr-10 text-left shadow-sm transition hover:bg-primary/5 focus:outline-none focus:ring-2 focus:ring-primary/30 ">
-            <span className="block truncate">
-              {activeMatch.name}
-            </span>
-            <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
-              <ChevronDown className="h-5 w-5 text-muted-foreground" />
-            </span>
+    <Listbox value={selected.id} onChange={onChange}>
+      {({ open } : {open : boolean}) => (
+        <div className="relative inline-block text-left">
+          {/* Il pulsante */}
+          <Listbox.Button className="flex items-center justify-between w-60 px-4 py-2 bg-white border border-border rounded-lg shadow-sm hover:text-primary transition-colors border-primary">
+            <span className="truncate">{selected.name}</span>
+            <ChevronDown className="ml-2 h-5 w-5 text-muted-foreground" />
           </Listbox.Button>
 
+          {/* Quando open, portalto il menu a livello di <body> */}
           <Transition
+            as={Fragment}
+            show={open}
             enter="transition ease-out duration-100"
             enterFrom="opacity-0 scale-95"
             enterTo="opacity-100 scale-100"
@@ -38,37 +48,42 @@ const MatchSelect = ({ matches, activeFavorite, onChange }: MatchSelectProps) =>
             leaveFrom="opacity-100 scale-100"
             leaveTo="opacity-0 scale-95"
           >
-            <Listbox.Options className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-lg bg-card py-1 text-base shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm">
+            <Listbox.Options
+              static
+              className="absolute z-50 mt-2 w-60 bg-white rounded-lg shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none"
+            >
               {matches.map((match) => (
                 <Listbox.Option
                   key={match.id}
-                  className={({ active }) =>
-                    `relative cursor-pointer select-none py-2 pl-10 pr-4 ${
-                      active ? "bg-primary/10 text-primary" : "text-foreground"
+                  value={match.id}
+                  className={({ active }: { active: boolean }) =>
+                    `cursor-pointer select-none px-4 py-2 ${
+                      active
+                        ? "bg-primary/10 text-primary"
+                        : "text-gray-800"
                     }`
                   }
-                  value={match.id}
                 >
-                  {({ selected }) => (
-                    <>
-                      <span className={`block truncate ${selected ? "font-medium" : "font-normal"}`}>
-                        {match.name} 
+                  {({ selected }: { selected: boolean }) => (
+                    <div className="flex items-center justify-between">
+                      <span
+                        className={`truncate ${
+                          selected ? "font-medium" : "font-normal"
+                        }`}
+                      >
+                        {match.name}
                       </span>
                       {selected && (
-                        <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-primary">
-                          <Check className="h-5 w-5" />
-                        </span>
+                        <Check className="h-5 w-5 text-primary" />
                       )}
-                    </>
+                    </div>
                   )}
                 </Listbox.Option>
               ))}
             </Listbox.Options>
           </Transition>
         </div>
-      </Listbox>
-    </div>
-  );
-};
-
-export default MatchSelect;
+      )}
+    </Listbox>
+  )
+}

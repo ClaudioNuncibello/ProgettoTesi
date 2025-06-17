@@ -8,9 +8,9 @@ from kafka import KafkaProducer
 import json
 
 # Config
-#API_KEY = "AymenURP9kWkgEatcBdcYA"
+API_KEY = "AymenURP9kWkgEatcBdcYA"
 #API_KEY = "Zc6NKDUI70eCDcwwgxj_kw"
-API_KEY = "2SRC4Sh4lkukveijWwruFw"
+#API_KEY = "2SRC4Sh4lkukveijWwruFw"
 #API_KEY = "RLrC2K7dukWrUVsacfcHyg"
 
 MATCHES_URL = "https://volleyball.sportdevs.com/matches?status_type=eq.live"

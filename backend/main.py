@@ -61,3 +61,43 @@ def get_match_data(match_id: int):
 
     # restituisci il documento più recente
     return hits[0]["_source"]
+
+
+@app.get("/matches/{match_id}/sets-predictions")
+def get_sets_and_predictions(match_id: int):
+    # 1) Recupera tutti i documenti di questo match, ordinati per timestamp asc
+    payload = {
+        "query": {
+            "term": { "match_id": match_id }
+        },
+        "sort": [
+            { "timestamp": { "order": "asc" } }
+        ],
+        "size": 10000
+    }
+    result = es_search(payload)
+    hits = result.get("hits", {}).get("hits", [])
+
+    if not hits:
+        raise HTTPException(status_code=404, detail="Match non trovato")
+
+    # 2) Split dei risultati in due array: sets e predictions
+    sets = []
+    predictions = []
+    for hit in hits:
+        src = hit["_source"]
+        # campi di set-info
+        sets.append({
+            "timestamp":         src["timestamp"],
+            "set_info":          src.get("set_info"),
+        })
+        # campi di prediction
+        predictions.append({
+            "timestamp":     src["timestamp"],
+            "predicted_win": src.get("predicted_win"),
+        })
+
+    return {
+        "sets":        sets,
+        "predictions": predictions
+    }
