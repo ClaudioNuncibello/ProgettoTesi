@@ -140,6 +140,31 @@ export default function Dashboard() {
     }
   }
 
+  // --- Fetch “Prod” per la lista SportDevs (colonna di sinistra) ---More actions
+  async function fetchMatchesProd() {
+    setError(null)
+    setLoading(true)
+    try {
+      const res = await fetch(MATCHES_URL, {
+        headers: { Authorization: `Bearer ${API_KEY}` },
+      })
+      if (!res.ok) throw new Error(`Status ${res.status}`)
+      const data: any[] = await res.json()
+      const minimal: SportDevMatch[] = data.map((m) => ({
+        id: m.id,
+        name: m.name,
+        start_time: m.start_time,
+        tournament_name : m.tournament_name,
+      }))
+      setMatches(minimal)
+    } catch (err) {
+      console.error("Errore fetch SportDevs:", err)
+      setError("Errore nella richiesta API SportDevs")
+    } finally {
+      setLoading(false)
+    }
+  }
+
   // Fetch fallback per i dettagli (colonna di destra)
   async function fetchMatchDetailsDev(matchId: number) {
     try {
@@ -153,9 +178,26 @@ export default function Dashboard() {
     }
   }
 
+  // --- Fetch “Prod” per i dettagli (colonna di destra) ---Add commentMore actions
+  async function fetchMatchDetailsProd(matchId: number) {
+    try {
+      const res = await fetch(DETAIL_URL(matchId))
+      if (!res.ok) throw new Error(`Status ${res.status}`)
+      const data: DetailedMatch = await res.json()
+      setDetailedMatches((prev) => ({
+        ...prev,
+        [matchId]: data,
+      }))
+    } catch {
+      // Gestione errori silenziosa per dettagli
+    }
+  }
+
   // Scegli quale fetch usare
   const fetchMatches = fetchMatchesDev
   const fetchMatchDetails = fetchMatchDetailsDev
+  //const fetchMatches = fetchMatchesProd
+  //const fetchMatchDetails = fetchMatchDetailsProd
 
   useEffect(() => {
     fetchMatches()
