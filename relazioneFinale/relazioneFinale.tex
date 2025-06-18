@@ -3,6 +3,7 @@
 \usepackage[italian]{babel}
 \usepackage[hidelinks]{hyperref}
 \usepackage{graphicx}
+\usepackage{caption}
 \usepackage{lmodern}
 \usepackage{setspace}
 \usepackage{geometry}
@@ -372,27 +373,30 @@ Il DataFrame \texttt{processed\_df} risultante contiene ora solo colonne tipizza
 
 \subsection{Addestramento del modello}
 
-Il modello predittivo utilizzato nella pipeline streaming è stato addestrato offline, separatamente dal flusso Spark, tramite uno script Python dedicato. La scelta di eseguire l’addestramento in una fase distinta e non in tempo reale è dovuta principalmente al fatto che, durante l’elaborazione live di uno snapshot, non si dispone del \textit{target} finale, ovvero del risultato della partita su cui si basa la predizione. Il dato di riferimento (cioè quale squadra ha effettivamente vinto) diventa noto solo al termine dell’incontro, rendendo impossibile addestrare o aggiornare il modello dinamicamente durante il match.
+L’addestramento del modello predittivo avviene interamente all’avvio del container Spark: ad ogni riavvio del job viene caricato il dataset di snapshot etichettati da CSV, eseguito il parsing della durata di gioco e calcolate le feature avanzate (set diff, flag critici e pesature delle statistiche). Su questi dati si costruisce una pipeline MLlib modulare, composta da:
+\begin{enumerate}
+  \item \textbf{Imputer}, che sostituisce i valori mancanti delle feature numeriche con le mediane calcolate sul training;
+  \item \textbf{StringIndexer}, che trasforma gli identificativi di squadra in indici numerici, gestendo le categorie non viste con \texttt{handleInvalid="keep"};
+  \item \textbf{VectorAssembler}, che aggrega tutte le feature (imputate e one-hot) in un unico vettore;
+  \item \textbf{StandardScaler}, che centra e scala il vettore a media zero e deviazione standard uno;
+  \item \textbf{LogisticRegression}, che applica la regressione logistica con regolarizzazione L2 (\texttt{regParam=1.0}, \texttt{elasticNetParam=0.0}) e calcola la probabilità di vittoria (\texttt{probabilityCol="probability"}).
+\end{enumerate}
+Al termine dell’addestramento il modello viene salvato in \texttt{/data/models/volley\_logreg/latest} mediante \texttt{model.write().overwrite().save()}. In fase di scoring streaming, Spark non riaddestra più il modello: carica semplicemente il modello serializzato e le mediane per il fill-na, applica in tempo reale le trasformazioni agli snapshot provenienti da Kafka e indicizza le probabilità predittive in Elasticsearch.
 
-Oltre a questa motivazione strutturale, l’uso di \texttt{scikit-learn} al posto di Spark MLlib è stato dettato anche da altre considerazioni progettuali. Il dataset di training ha dimensioni contenute e può essere gestito interamente in memoria; inoltre, \texttt{scikit-learn} offre maggiore flessibilità nella costruzione della pipeline e nella validazione dei modelli. La serializzazione tramite \texttt{joblib} consente di salvare il classificatore in modo semplice e compatibile con Spark, facilitandone il riutilizzo in fase di scoring.
-
-Il file \texttt{trainer\_models.py} legge un dataset di snapshot etichettati, calcola una serie di feature avanzate, applica un preprocessing completo e addestra un modello di regressione logistica. Il modello viene infine salvato nella directory locale \texttt{spark/models/}, che è montata come volume nel container Spark. In questo modo, ogni nuova esecuzione della pipeline Spark può caricare automaticamente l’ultima versione aggiornata del modello senza ricalcolarlo.
 
 \subsection{Feature derivate}
 
-Per migliorare la capacità predittiva del modello, oltre alle variabili direttamente disponibili negli snapshot (come punteggio, set vinti e durata della partita), lo script di addestramento calcola una serie di \textit{feature derivate}, che sintetizzano informazioni più complesse e situazionali. Queste trasformazioni, definite nella funzione \texttt{add\_advanced\_features} dello script \texttt{trainer\_models.py}, si basano sull’osservazione di pattern ricorrenti nelle partite e hanno lo scopo di rendere il modello più sensibile al contesto dinamico del match.
-
-Tra le principali feature calcolate si trovano:
+Per migliorare la capacità predittiva del modello, oltre alle variabili direttamente disponibili negli snapshot (come punteggio, set vinti e durata della partita), lo script Spark calcola “on-the-fly” una serie di feature derivate definite nel file \texttt{spark.py} tramite UDF, sintetizzando informazioni più complesse e situazionali. Tra le principali feature si annoverano:
 \begin{itemize}
-  \item \texttt{set\_diff\_current}, che rappresenta la differenza punti dell’ultimo set giocato, estratta analizzando il campo testuale \texttt{set\_info};
-  \item \texttt{current\_set\_number}, ottenuta dal parsing del campo \texttt{match\_status}, per identificare il momento del match (inizio, set centrale, set decisivo);
-  \item \texttt{set\_importance}, un valore numerico (0.5 o 1.0) che quantifica quanto il set corrente possa influenzare l’esito finale della partita;
-  \item una serie di flag binari, come \texttt{flag\_3set\_severo\_home} o \texttt{flag\_critico\_base\_away}, che segnalano situazioni potenzialmente critiche per una delle due squadre, in base a punteggio e andamento;
-  \item \texttt{home\_win\_rate\_adj} e \texttt{away\_win\_rate\_adj}, che sono versioni modificate delle statistiche di win rate storiche, penalizzate dinamicamente se la squadra si trova in difficoltà nel momento presente;
-  \item \texttt{win\_rate\_diff}, una variabile riassuntiva che misura il differenziale tra le due versioni adattate dei win rate.
+  \item \texttt{set\_diff\_current}, che ricava la differenza punti dell’ultimo set giocato analizzando il campo testuale \texttt{set\_info};
+  \item \texttt{current\_set\_number}, ottenuta dal parsing del campo \texttt{match\_status} per individuare il momento del match (inizio, set centrale, set decisivo);
+  \item \texttt{set\_importance}, un valore numerico (0.5 o 1.0) che misura l’importanza strategica del set corrente sull’esito finale;
+  \item flag binari come \texttt{flag\_3set\_severo\_home} e \texttt{flag\_critico\_base\_away}, che segnalano situazioni potenzialmente critiche in base al punteggio e all’andamento;
+  \item \texttt{home\_win\_rate\_adj} e \texttt{away\_win\_rate\_adj}, versioni adattate dei win rate storici, penalizzate dinamicamente in caso di svantaggio nel corso del set;
+  \item \texttt{win\_rate\_diff}, che sintetizza in un’unica variabile il differenziale tra le due versioni adattate dei win rate.
 \end{itemize}
+Per dare peso maggiore alle condizioni di gioco correnti rispetto alle statistiche storiche,\\ \texttt{set\_diff\_current} viene moltiplicato per un fattore 2, enfatizzando il differenziale istantaneo, mentre le feature basate su statistiche storiche (come \texttt{home\_win\_rate\_last5}, \texttt{away\_win\_rate\_last5} e  \texttt{head\_to\_head\_win\_rate\_home}) vengono scalate di un fattore 0.5, introducendo un decadimento temporale. Queste trasformazioni, eseguite direttamente da Spark nel flusso di elaborazione, hanno dimostrato di aumentare stabilità e precisione del modello rispetto all’uso delle sole feature originali, permettendo di catturare in modo più efficace fattori dinamici e situazionali del match.
 
-Tutte queste variabili vengono calcolate in \texttt{pandas} prima dell’addestramento vero e proprio, e sono incluse nella pipeline di preprocessing. Il loro utilizzo ha portato a un miglioramento significativo della stabilità e della precisione del modello rispetto all’utilizzo delle sole feature originali. Queste trasformazioni permettono infatti di modellare fattori latenti come il “momento psicologico” della gara o l’importanza strategica del set in corso, difficilmente rappresentabili con le sole statistiche grezze.
 
 
 \subsection{Applicazione del modello in streaming}
@@ -445,14 +449,106 @@ Con questa fase si conclude la pipeline di elaborazione streaming: ogni snapshot
 
 \chapter{Visualizzazione e Interfaccia Utente}
 
-\section{Struttura della Dashboard}
-% Testo da inserire
+\section{Architettura del Sito e Organizzazione del Codice}
 
-\section{Sistema dei Preferiti e Interazione Utente}
-% Testo da inserire
+L’architettura del sito \textit{VolleyLive} si basa su una chiara separazione tra interfaccia utente e logica \textit{backend}, rispecchiata nella suddivisione delle directory all’interno della repository.
 
-\section{Tecnologie Web Adottate}
-% Testo da inserire
+Il codice dell’interfaccia utente è contenuto nella cartella \texttt{/frontend}, sviluppata con il framework \textit{Next.js}.
+Per lo styling è stato adottato Tailwind CSS, una libreria utility-first che consente di costruire interfacce responsive in modo rapido e modulare. Grazie a Tailwind, i componenti della UI sono stati progettati con uno stile coerente, facilmente personalizzabile e pienamente compatibile con dispositivi mobili e schermi di diverse dimensioni.
+
+L’architettura del progetto segue le convenzioni di Next.js, con una struttura chiara e modulare che facilita l’estensione e la manutenzione del codice : 
+\begin{itemize}
+    \item \texttt{app/}: definizione delle rotte e delle pagine principali,
+    \item \texttt{components/}: insieme di componenti UI riutilizzabili,
+    \item \texttt{public/}: risorse statiche come immagini e icone,
+    \item \texttt{styles/}: fogli di stile personalizzati tramite Tailwind CSS,
+    \item \texttt{utils/}: funzioni di utilità condivise tra i vari componenti.
+\end{itemize}
+
+Il \textit{backend} si trova nella directory \texttt{/backend} ed è sviluppato con \textit{FastAPI}, fornendo un'interfaccia REST che consente al frontend di interrogare Elasticsearch:
+\begin{itemize}
+    \item \texttt{main.py}: entrypoint dell’applicazione,
+    \item \texttt{models/}: definizione dei modelli dati e delle classi di risposta.
+\end{itemize}
+
+
+\section{Backend API: Connessione tra Elasticsearch e Frontend}
+
+Il backend del sistema VolleyLive è sviluppato in \textbf{FastAPI}, una libreria moderna e performante per la costruzione di API RESTful. Il suo ruolo principale è fornire un’interfaccia leggera tra il frontend e il database Elasticsearch, restituendo dati aggiornati in formato JSON da visualizzare nella dashboard.
+
+Nel file \texttt{main.py}, situato nella directory \texttt{/backend}, viene inizializzata l’applicazione FastAPI e viene definita la connessione al servizio Elasticsearch, indirizzato al container \texttt{elasticsearch-volley}. La comunicazione avviene tramite richieste HTTP POST, con payload in formato JSON.
+
+La funzione centrale del backend è \texttt{es\_search(payload: dict)}, che incapsula la logica di invio delle richieste verso Elasticsearch e la gestione degli errori. Essa viene invocata dagli endpoint definiti nell’applicazione, come ad esempio:
+
+\begin{lstlisting}[language=Python]
+@app.get("/match/{match_id}")
+def get_match_data(match_id: int):
+    query = {
+        "query": { "term": { "match_id": match_id } },
+        "sort": [ { "timestamp": { "order": "desc" } } ],
+        "size": 1
+    }
+    result = es_search(query)
+    hits = result.get("hits", {}).get("hits", [])
+
+    if not hits:
+        raise HTTPException(status_code=404, detail="Match non trovato")
+
+    return hits[0]["_source"]
+\end{lstlisting}
+
+Questo endpoint consente di ottenere l’\textit{ultimo snapshot disponibile per una determinata partita}, identificata tramite \texttt{match\_id}. Il risultato restituito contiene i dati completi della partita, tra cui punteggi, stato, set vinti e lo score predittivo \texttt{predicted\_win}.
+\\
+
+Il secondo endpoint, definito con
+
+\begin{lstlisting}[language=Python]
+@app.get("/matches/{match_id}/sets-predictions")
+\end{lstlisting}
+
+recupera invece l’intera sequenza di aggiornamenti per una data partita, ordinando i documenti per \texttt{timestamp} in ordine crescente. Dopo il fetch, il backend suddivide i risultati in due array distinti: \texttt{sets}, contenente gli oggetti \texttt{set\_info} con relativo \texttt{timestamp}, e \texttt{predictions}, con i valori \texttt{predicted\_win} e i rispettivi \texttt{timestamp}.
+
+
+In fase di sviluppo, il middleware CORS è configurato per accettare richieste da qualsiasi origine, permettendo la comunicazione con il frontend anche in ambienti locali.
+
+L’interfaccia API così progettata offre un punto di accesso semplice e modulare ai dati, ed è facilmente estendibile per supportare filtri aggiuntivi, endpoint aggregati o sistemi di caching futuri.
+
+
+\section{Struttura e Funzionalità della Dashboard}
+
+\noindent\begin{minipage}{\textwidth}
+  \centering
+  \includegraphics[width=\textwidth]{dashboard.png}
+  \label{fig:dashboard}
+\end{minipage}
+
+\\
+\\
+La dashboard del sistema VolleyLive è progettata per fornire una panoramica completa e interattiva delle partite in corso, aggiornandosi in tempo reale tramite le API interne. L’interfaccia si compone principalmente di due sezioni: una colonna laterale sinistra per la selezione dei match e un’area centrale che visualizza i dettagli del match attivo.
+
+Nella colonna sinistra vengono elencate le partite disponibili, con informazioni essenziali come i nomi delle squadre, lo stato della partita (\textit{``in corso''}) e l’orario d’inizio. Ogni riga è selezionabile e l’utente può anche marcare un match come preferito tramite l’icona a forma di stella. La lista si aggiorna dinamicamente interrogando l’API di backend, mostrando solo i match attualmente live.
+
+La sezione principale della dashboard mostra nel dettaglio le informazioni della partita selezionata. In alto a sinistra è presente un box riassuntivo con:
+\begin{itemize}
+  \item i nomi delle due squadre,
+  \item i punteggi aggiornati set per set,
+  \item il torneo e l’orario della partita.
+\end{itemize}
+
+Al centro dello schermo viene visualizzato il valore di \textbf{predicted win}, ovvero la probabilità stimata di vittoria calcolata dal modello di machine learning. Questo valore è rappresentato tramite un grafico a semicerchio (gauge) che mostra in modo chiaro l’andamento della probabilità tra squadra di casa e ospite.
+
+Nella parte inferiore della schermata sono presenti tre blocchi distinti:
+\begin{itemize}
+  \item A sinistra, una sintesi della forma recente della squadra di casa, con gli ultimi cinque risultati (vittorie e sconfitte) rappresentati da pallini colorati.
+  \item Al centro, una barra che rappresenta le statistiche degli scontri diretti (\textit{head-to-head win rate}) tra le due squadre, utile per contestualizzare la previsione.
+  \item A destra, lo stesso indicatore di forma per la squadra ospite.
+\end{itemize}
+
+Infine, nella parte più bassa viene mostrato un grafico a linea che rappresenta l’\textbf{andamento temporale del punteggio predittivo}. Questo consente all’utente di osservare come si è evoluta la probabilità di vittoria nel corso del match, fornendo una visione più profonda sull’equilibrio o sul dominio tra le squadre.
+
+Tutti i dati sono aggiornati automaticamente ogni pochi secondi, senza necessità di refresh manuale. Grazie a questo meccanismo di aggiornamento continuo, l’utente può seguire in tempo reale l’evoluzione della partita, con un’interfaccia chiara, responsiva e focalizzata sugli elementi più rilevanti.
+
+
 
 
 % ===============================
@@ -461,18 +557,52 @@ Con questa fase si conclude la pipeline di elaborazione streaming: ogni snapshot
 
 \chapter{Esecuzione del Sistema e Risultati Osservati}
 
-\section{Snapshot e Ciclo Completo del Sistema}
+\section{Esecuzione Completa della Pipeline}
 % Testo da inserire
 
-\section{Query ed Esempi su Kibana}
+\section{Valutazione del Modello Predittivo}
+
+Per misurare la capacità di generalizzazione del modello, i dati sono stati suddivisi per \texttt{match\_id}: il 80\,\% degli snapshot è stato utilizzato per l’addestramento, mentre il restante 20\,\% è stato riservato al test, garantendo l’assenza di leak tra train e test.
+
+Sul test set, costituito da 721 snapshot, si ottengono le seguenti metriche:
+
+\begin{itemize}
+  \item \textbf{Accuracy:} 0.7462 \\
+    Il modello classifica correttamente circa 3 snapshot su 4.
+  \item \textbf{AUC–ROC:} 0.8479 \\
+    Buon potere discriminante tra vittoria e sconfitta, indipendente dalla soglia di decisione.
+  \item \textbf{Log Loss:} 0.5764 \\
+    Indica la qualità delle probabilità predette; valori più bassi denotano migliore calibrazione.
+  \item \textbf{Brier Score:} 0.1939 \\
+    Misura la distanza quadratica tra probabilità predetta e risultato osservato.
+\end{itemize}
+
+\noindent La matrice di confusione sul test set è:
+
+\begin{verbatim}
+              Pred=0   Pred=1
+Actual=0       328       117
+Actual=1        66       210
+\end{verbatim}
+
+Si riscontrano 117 falsi positivi e 66 falsi negativi, a indicare situazioni in cui il modello sovrastima o sottostima la probabilità di vittoria.
+
+\medskip
+
+\noindent Va inoltre ricordato che il file \texttt{trainer\_model.csv} è in continua crescita: ogni nuovo snapshot arricchisce il dataset e consente un costante miglioramento delle prestazioni del modello. Con l’aumentare dei dati raccolti, è ragionevole attendersi un incremento dell’AUC–ROC e una diminuzione di Log Loss e Brier Score.
+
+\medskip
+
+\noindent Nel paragrafo seguente confronteremo queste prestazioni con l’evoluzione predittiva di un singolo match, analizzando come varia lo \textit{score} predittivo in corrispondenza dei momenti chiave della partita.
+
+
+
+\section{ Caso Studio: Evoluzione di un Match}
 % Testo da inserire
 
-\section{Output Predittivo e Andamento Match}
-% Testo da inserire
+\section{Latenza e Prestazioni della Pipeline}
 
-\section{Osservazioni e Coerenza dei Dati}
 % Testo da inserire
-
 
 % ===============================
 % CAPITOLO 6 - Conclusioni
