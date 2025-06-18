@@ -21,6 +21,8 @@ from pyspark.ml.classification import LogisticRegression
 # ------------------ Spark Session ------------------
 spark = SparkSession.builder \
     .appName("VolleyballSnapshotProcessor") \
+    .config("spark.driver.memory", "8g") \
+    .config("spark.executor.memory", "8g") \
     .config("spark.jars.packages",
         "org.apache.spark:spark-sql-kafka-0-10_2.12:3.3.0,"
         "org.elasticsearch:elasticsearch-spark-30_2.12:8.7.1") \
@@ -88,6 +90,7 @@ def compute_set_importance(home_sets_won: float, away_sets_won: float, current_s
         return 1.0
     return 0.5
 
+
 @udf("double")
 def compute_home_win_rate_adj(home_win_rate_last5: float,
                               home_current_score: float,
@@ -96,16 +99,26 @@ def compute_home_win_rate_adj(home_win_rate_last5: float,
                               set_diff_current: float,
                               current_set_number: int,
                               set_importance: float) -> float:
-    base = home_win_rate_last5 or 0.0
-    sd = set_diff_current or 0.0
-    cs = current_set_number or 1
+    # fallback se mancano dati
+    if home_win_rate_last5 is None or home_current_score is None \
+       or away_current_score is None or score_diff is None \
+       or set_diff_current is None or current_set_number is None \
+       or set_importance is None:
+        return float(home_win_rate_last5 or 0.0) * float(set_importance or 1.0)
+
+    base = home_win_rate_last5
+    sd   = set_diff_current
+    cs   = current_set_number
+
     if cs == 3 and sd <= -3.0:
         adj = base * 0.05
     elif ((home_current_score >= 20.0) or (away_current_score >= 20.0)) and (score_diff <= -2.0):
         adj = base * 0.25
     else:
         adj = base
+
     return adj * set_importance
+
 
 @udf("double")
 def compute_away_win_rate_adj(away_win_rate_last5: float,
@@ -115,16 +128,26 @@ def compute_away_win_rate_adj(away_win_rate_last5: float,
                               set_diff_current: float,
                               current_set_number: int,
                               set_importance: float) -> float:
-    base = away_win_rate_last5 or 0.0
-    sd = set_diff_current or 0.0
-    cs = current_set_number or 1
+    # fallback se mancano dati
+    if away_win_rate_last5 is None or home_current_score is None \
+       or away_current_score is None or score_diff is None \
+       or set_diff_current is None or current_set_number is None \
+       or set_importance is None:
+        return float(away_win_rate_last5 or 0.0) * float(set_importance or 1.0)
+
+    base = away_win_rate_last5
+    sd   = set_diff_current
+    cs   = current_set_number
+
     if cs == 3 and sd >= 3.0:
         adj = base * 0.05
     elif ((home_current_score >= 20.0) or (away_current_score >= 20.0)) and (score_diff >= 2.0):
         adj = base * 0.25
     else:
         adj = base
+
     return adj * set_importance
+
 
 @udf("integer")
 def compute_flag_3set_severo_home(current_set_number: int, set_diff_current: float) -> int:
@@ -253,29 +276,25 @@ medians_original = {
 
 # ------------------ Costruzione pipeline di feature + LogisticRegression ------------------
 
-# 1) Imputer per tutte le numeriche (incluse quelle avanzate)
+# 1) Imputer per tutte le numeriche
 imputer = Imputer(
     inputCols=num_cols_all,
     outputCols=[f"{c}_imp" for c in num_cols_all]
 )
 
-# 2) StringIndexer + OneHotEncoder per categoriali
+# 2) StringIndexer (solo index, senza OHE)
 indexers = [
     StringIndexer(inputCol=c, outputCol=f"{c}_idx", handleInvalid="keep")
     for c in cat_cols
 ]
-encoders = [
-    OneHotEncoder(inputCol=f"{c}_idx", outputCol=f"{c}_ohe")
-    for c in cat_cols
-]
 
-# 3) Assembler delle feature imp e OHE
+# 3) Assembler include i due indici numerici anziché vettori OHE
 assembler = VectorAssembler(
-    inputCols=[f"{c}_imp" for c in num_cols_all] + [f"{c}_ohe" for c in cat_cols],
+    inputCols=[f"{c}_imp" for c in num_cols_all] + [f"{c}_idx" for c in cat_cols],
     outputCol="assembled_features"
 )
 
-# 4) StandardScaler per centrare e scalare
+# 4) StandardScaler
 scaler = StandardScaler(
     inputCol="assembled_features",
     outputCol="features",
@@ -283,17 +302,16 @@ scaler = StandardScaler(
     withStd=True
 )
 
-# 5) LogisticRegression
+# 5) LogisticRegression (puoi aumentare regParam o usare elasticNet)
 lr = LogisticRegression(
     featuresCol="features",
     labelCol="target_win",
-    maxIter=100,
+    maxIter=50,
     regParam=1.0,
-    elasticNetParam=0.0,
-    probabilityCol="probability"
+    elasticNetParam=0.0
 )
 
-pipeline = Pipeline(stages=[imputer] + indexers + encoders + [assembler, scaler, lr])
+pipeline = Pipeline(stages=[imputer] + indexers + [assembler, scaler, lr])
 model = pipeline.fit(batch_feat)
 
 # Salva il modello su disco
