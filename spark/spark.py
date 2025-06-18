@@ -30,6 +30,9 @@ spark = SparkSession.builder \
 
 # ------------------ UDFs per feature engineering ------------------
 
+WEIGHT_SET_DIFF = 2.0
+
+
 @udf("double")
 def parse_duration(s: str) -> float:
     if s is None:
@@ -214,6 +217,13 @@ batch_feat = (
                     col("set_importance")
                 ))
     .withColumn("win_rate_diff", col("home_win_rate_adj") - col("away_win_rate_adj"))
+    .withColumn("set_diff_current", col("set_diff_current") * lit(WEIGHT_SET_DIFF))
+    # ←––––– alpha sulle storiche –––––───────────┐
+    .withColumn("home_win_rate_last5", col("home_win_rate_last5") * lit(0.5))
+    .withColumn("away_win_rate_last5", col("away_win_rate_last5") * lit(0.5))
+    .withColumn("head_to_head_win_rate_home",
+                col("head_to_head_win_rate_home") * lit(0.5))
+    # └───────────────────────────────────────────────────────────────────────┘
 )
 
 # ------------------ Definizione colonne numeriche e categoriali ------------------
@@ -378,6 +388,7 @@ stream_feat = (
                     col("set_importance")
                 ))
     .withColumn("win_rate_diff", col("home_win_rate_adj") - col("away_win_rate_adj"))
+    .withColumn("set_diff_current", col("set_diff_current") * lit(WEIGHT_SET_DIFF))
 
     # ←––––– alpha sulle storiche –––––───────────┐
     .withColumn("home_win_rate_last5", col("home_win_rate_last5") * lit(0.5))

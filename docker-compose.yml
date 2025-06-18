@@ -94,7 +94,6 @@ services:
     volumes:
       - ./spark/spark.py:/home/spark.py
       - ./spark/data:/data
-      - ./spark/models:/data/models
       - ./spark/checkpoint:/tmp/spark-es-checkpoint
     networks:
       - network

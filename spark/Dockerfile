@@ -22,7 +22,11 @@ ARG PYSPARK_VERSION=3.4.0
 RUN pip install --no-cache-dir \
       pyspark==${PYSPARK_VERSION} \
       elasticsearch \
-      numpy
+      numpy \
+      joblib \
+      pandas \
+      scikit-learn \
+      pyarrow
 
 # 5) Imposti la working dir
 WORKDIR /home
