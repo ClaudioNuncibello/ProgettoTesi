@@ -288,7 +288,7 @@ if __name__ == "__main__":
                         to_write.append(snap)
                         LAST_SCORES[mid] = curr
 
-                OUT_PATH = "/Users/claudio/Documents/GitHub/ProgettoTesi/scripts/live_snapshots.csv"
+                OUT_PATH = "/Users/claudio/Documents/GitHub/ProgettoTesi/producer/live_snapshots.csv"
                 os.makedirs(os.path.dirname(OUT_PATH), exist_ok=True)
 
                 if to_write:
