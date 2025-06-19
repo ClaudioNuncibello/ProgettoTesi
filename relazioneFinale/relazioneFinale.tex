@@ -456,6 +456,14 @@ L’architettura del sito \textit{VolleyLive} si basa su una chiara separazione 
 Il codice dell’interfaccia utente è contenuto nella cartella \texttt{/frontend}, sviluppata con il framework \textit{Next.js}.
 Per lo styling è stato adottato Tailwind CSS, una libreria utility-first che consente di costruire interfacce responsive in modo rapido e modulare. Grazie a Tailwind, i componenti della UI sono stati progettati con uno stile coerente, facilmente personalizzabile e pienamente compatibile con dispositivi mobili e schermi di diverse dimensioni.
 
+\noindent\begin{minipage}{\textwidth}
+  \centering
+    \includegraphics[width=\textwidth]{home.png}
+    \label{fig:home web app}
+\end{minipage}
+
+
+
 L’architettura del progetto segue le convenzioni di Next.js, con una struttura chiara e modulare che facilita l’estensione e la manutenzione del codice : 
 \begin{itemize}
     \item \texttt{app/}: definizione delle rotte e delle pagine principali,
@@ -558,7 +566,52 @@ Tutti i dati sono aggiornati automaticamente ogni pochi secondi, senza necessit�
 \chapter{Esecuzione del Sistema e Risultati Osservati}
 
 \section{Esecuzione Completa della Pipeline}
-% Testo da inserire
+
+Per comprendere il funzionamento del sistema VolleyLive, è utile seguire passo per passo il percorso di un dato all'interno della pipeline, partendo dal momento in cui viene generato dallo script Python fino alla sua comparsa nel frontend. Questo paragrafo illustra un esempio concreto, utilizzando log e snapshot effettivamente raccolti durante una sessione di monitoraggio reale.
+Ai fini della chiarezza espositiva, vengono mostrate solo le componenti principali della pipeline di analisi in tempo reale (producer, Kafka, Spark, Elasticsearch e Frontend), omettendo Logstash, il backend API e strumenti di ispezione come Kibana, poiché non influenzano direttamente il flusso dati trattato in questa sezione dimostrativa.
+
+\subsection*{Snapshot in Ingresso}
+
+\noindent\begin{minipage}{\textwidth}
+  \centering
+    \includegraphics[width=\textwidth]{producer.png}
+    \label{fig:producer.py}
+\end{minipage}
+Il producer Python esegue interrogazioni periodiche all’API SportDevs e genera uno o più snapshot ogni 10 secondi. In un caso osservato, l’aggiornamento delle partite con match ID 199022 e 208463 viene rilevato alle ore 11:18:14 e i dati vengono immediatamente inviati al topic Kafka \texttt{matchvolley}.
+
+
+\subsection*{Invio su Kafka}
+Ogni snapshot viene pubblicato nel topic Kafka dedicato, nella partizione 0. Il terminale conferma l’avvenuto invio per ciascun match, specificando il timestamp e il numero di righe aggiornate. Le righe riportate, come visibile nel dump CSV, contengono il x\texttt{match\_id}, il timestamp, lo stato dei set, punteggi parziali e diverse feature derivate, tra cui \texttt{set\_diff}, \texttt{score\_diff} e \texttt{predicted\_win}.
+
+
+\noindent\begin{minipage}{\textwidth}
+  \centering
+    \includegraphics[width=\textwidth]{snapshoat.png}
+    \label{fig:dati grezzi}
+\end{minipage}
+
+\subsection*{Elaborazione con Spark}
+Il micro-batch di Spark intercetta i nuovi offset da Kafka, elabora il contenuto e applica il modello predittivo. Dai log si osserva che Spark riceve il messaggio (es. offset da 1626 a 1627), esegue le trasformazioni e calcola lo score predittivo tramite regressione logistica. L'intero batch viene processato in meno di un secondo (con un tempo di \texttt{triggerExecution} pari a 978\,ms), e i risultati vengono immediatamente scritti nell’indice \texttt{volleyball\_matches}.
+
+\subsection*{Scrittura su Elasticsearch}
+Dopo l'elaborazione, i documenti vengono scritti in Elasticsearch attraverso il connettore Spark--ES. I log riportano le operazioni di scrittura e i commit all’interno della directory di checkpoint \texttt{/tmp/spark-es-logreg-checkpoint}, a conferma della persistenza dei dati. La scrittura avviene in modalità \texttt{append}, mantenendo lo storico degli snapshot nel tempo.
+
+\subsection*{Visualizzazione sul Frontend}
+Infine, il frontend interroga l’indice Elasticsearch tramite il backend API, ottenendo i documenti aggiornati. 
+
+\noindent\begin{minipage}{\textwidth}
+  \centering
+    \includegraphics[width=\textwidth]{API.png}
+    \label{fig:API REST}
+\end{minipage}
+
+La dashboard mostra in tempo reale lo stato della partita, il punteggio set per set e la probabilità di vittoria (\texttt{predicted\_win}) calcolata pochi secondi prima da Spark.
+
+\noindent\begin{minipage}{\textwidth}
+  \centering
+    \includegraphics[width=\textwidth]{dashboard2.png}
+    \label{fig:dashboard}
+\end{minipage}
 
 \section{Valutazione del Modello Predittivo}
 
@@ -598,20 +651,74 @@ Si riscontrano 117 falsi positivi e 66 falsi negativi, a indicare situazioni in 
 
 
 \section{ Caso Studio: Evoluzione di un Match}
-% Testo da inserire
+
+
+Per valutare il comportamento dinamico del modello predittivo durante lo svolgimento di una partita, sono stati analizzati due incontri particolarmente significativi (ID 199023 e 198981), identificati all’interno del dataset sulla base dell’ampiezza delle oscillazioni predittive e della lunghezza del match.
+
+\subsection*{Fase iniziale}
+
+Nel primo match (ID 199023), la probabilità iniziale di vittoria per la squadra di casa era pari a 0{,}30, un valore piuttosto basso. Tale previsione rifletteva correttamente le condizioni di partenza: la squadra ospite presentava infatti una percentuale di vittorie nelle ultime cinque partite pari a 0{,}8, contro lo 0{,}2 della squadra di casa, e uno storico di scontri diretti sfavorevole. Analogamente, nel secondo match (ID 198981), il valore iniziale di \texttt{predicted\_win} per la squadra di casa era intorno a 0{,}32, anche in questo caso coerente con i dati storici sfavorevoli.
+
+\subsection*{Fase intermedia}
+
+Nel corso del primo set del match 199023, il punteggio si è mantenuto bilanciato fino al 13–13, momento in cui la probabilità stimata oscillava tra 0{,}31 e 0{,}33. Tuttavia, una breve serie negativa ha portato la squadra di casa a 13–16, facendo scendere la previsione a 0{,}28, segno della sensibilità del modello anche a brevi break sfavorevoli.
+
+Nel match 198981, invece, si è osservato un andamento più instabile nella fase centrale: tra il secondo e il terzo set, il punteggio ha visto alternarsi situazioni di parità e vantaggio da entrambe le parti. La \texttt{predicted\_win}, inizialmente scesa fino a 0{,}25 dopo un primo set perso, è risalita fino a 0{,}44 in corrispondenza di una rimonta nel secondo parziale, dimostrando la reattività del modello ai cambi di trend.
+
+\subsection*{Fase finale}
+
+Nel match 199023, il punteggio complessivo ha raggiunto 2–2 in set, portando le squadre al tie-break. In questa fase, la \texttt{predicted\_win} ha mostrato le oscillazioni più marcate, con picchi fino a 0{,}58 per la squadra di casa durante un parziale di vantaggio nel set decisivo. Tuttavia, anche piccole inversioni nel punteggio hanno prodotto rapide fluttuazioni predittive, confermando che la fase finale del match è percepita dal modello come altamente incerta.
+
+Anche nel match 198981 la partita si è conclusa al tie-break, con l’ultima porzione della curva predittiva che ha oscillato in modo più irregolare. La probabilità ha raggiunto un valore massimo di 0{,}55 per la squadra di casa, prima di scendere bruscamente negli ultimi snapshot, segnalando la progressiva definizione dell’esito sfavorevole.
+
+\subsection*{Partita a senso unico: stabilità predittiva}
+
+A titolo di confronto, è stato analizzato anche un match conclusosi con un risultato netto di 3–1 a favore della squadra di casa (match ID 199009). In questo caso, l’andamento della \texttt{predicted\_win} ha mostrato un comportamento molto più stabile: partendo da un valore iniziale di 0{,}51, è cresciuta progressivamente fino a 0{,}67 senza subire inversioni significative. La bassa escursione predittiva (delta = 0{,}16) riflette l’assenza di ribaltamenti o fasi di incertezza, confermando che il modello riesce a mantenere coerenza in situazioni di chiara supremazia.
+
+
+
+\noindent\begin{minipage}{\textwidth}
+  \centering
+    \includegraphics[width=\textwidth]{andamento_predicted_win_match_simple_x.png}
+    \label{fig:andamento-predicted-win}
+\end{minipage}
+
 
 \section{Latenza e Prestazioni della Pipeline}
 
-% Testo da inserire
+Uno degli obiettivi principali del progetto VolleyLive è garantire la reattività del sistema in tempo quasi reale. A tal fine, è stata progettata una pipeline in grado di elaborare, analizzare e rendere disponibili i dati entro pochi secondi dal loro arrivo.
+
+La misura della latenza è stata effettuata tracciando il tempo intercorrente tra la generazione di uno snapshot live da parte del producer Python (punto di partenza) e la visualizzazione aggiornata sul frontend (punto di arrivo). A ogni snapshot è associato un campo \texttt{timestamp}, che permette di confrontare i tempi intermedi nei vari passaggi della pipeline.
+
+Dalle osservazioni sperimentali condotte su partite reali, la latenza complessiva è risultata mediamente compresa tra \textbf{3 e 6 secondi}, con picchi massimi occasionali fino a 10 secondi nei casi di maggiore congestione. La suddivisione approssimativa della latenza può essere così schematizzata:
+
+\begin{itemize}
+  \item \textbf{Producer → Kafka → Logstash:} meno di 1 secondo;
+  \item \textbf{Logstash → Spark (elaborazione micro-batch):} circa 1--2 secondi;
+  \item \textbf{Spark → Elasticsearch (scrittura):} circa 1 secondo;
+  \item \textbf{Elasticsearch → API → Frontend:} circa 1--2 secondi.
+\end{itemize}
+
+La scelta di utilizzare una pipeline always-on e un modello predittivo snello (regressione logistica) ha permesso di mantenere bassi i tempi di elaborazione, senza rinunciare all’arricchimento degli snapshot con feature derivate e score predittivo.
+
+L’uso di checkpoint su Spark e la persistenza continua su Elasticsearch garantiscono inoltre la tolleranza ai guasti e il recupero in caso di restart del sistema, contribuendo alla robustezza complessiva dell’architettura.
+
 
 % ===============================
 % CAPITOLO 6 - Conclusioni
 % ===============================
 
 \chapter*{Conclusioni e Sviluppi Futuri}
-\addtocontents{toc}{\vspace{0.3cm}\textbf{Conclusioni e Sviluppi Futuri}\par}
 
-Bilancio Finale e Competenze Sviluppate
-Estensioni e Sviluppi Futuri
+Il progetto \textit{VolleyLive} ha dimostrato come sia possibile realizzare una pipeline di analisi in tempo reale basata su tecnologie open source, in grado di raccogliere, elaborare e visualizzare dati dinamici relativi a partite di pallavolo in corso. L’integrazione tra strumenti come Kafka, Spark ed Elasticsearch ha permesso non solo la gestione efficiente del flusso informativo, ma anche l’implementazione di un primo livello di analisi predittiva applicata al contesto sportivo.
+
+L’intero sistema è stato progettato con una struttura modulare e scalabile: ogni componente (dalla raccolta dati al frontend) può essere esteso o sostituito senza compromettere l’integrità dell’architettura. Questo approccio ha favorito la sperimentazione di modelli di machine learning integrabili all’interno della pipeline, con l’obiettivo di stimare in tempo reale la probabilità di vittoria durante lo svolgimento di una partita.
+
+Le analisi presentate nel Capitolo~\ref{cap:risultati}, condotte su match reali, hanno mostrato la capacità del modello di adattarsi al contesto della gara, rispondendo con sensibilità ai cambiamenti nel punteggio. Sebbene l’accuratezza del modello sia ancora soggetta alla quantità e alla qualità dei dati raccolti, i risultati ottenuti evidenziano la solidità della struttura implementata e la validità dell’approccio adottato.
+
+È importante sottolineare alcuni limiti attuali del sistema, legati principalmente alla natura delle fonti dati. Le informazioni raccolte tramite l’API di SportDevs, pur essendo sufficientemente ricche per le analisi svolte, non costituiscono una fonte ufficiale federale, e possono contenere errori, discrepanze o aggiornamenti ritardati. Inoltre, alcune partite vengono restituite in modo incompleto o con frequenza irregolare, introducendo una certa discontinuità nella raccolta degli snapshot.
+
+Nonostante questi vincoli, \textit{VolleyLive} rappresenta una base concreta su cui costruire future estensioni: tra queste, l’integrazione di analisi più avanzate basate su dati storici aggregati, il confronto tra competizioni diverse, e l’arricchimento dell’interfaccia utente con funzionalità predittive interattive.
+
 
 \end{document}

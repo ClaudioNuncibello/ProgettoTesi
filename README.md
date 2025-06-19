@@ -1,78 +1,88 @@
-# 🏐 VolleyLive: Piattaforma di Monitoraggio e Analisi delle Partite di Pallavolo in Tempo Reale
+# 🏐 VolleyLive: Analisi Predittiva delle Partite di Pallavolo in Tempo Reale
 
 ## 🎯 Obiettivo del Progetto
+VolleyLive è una piattaforma in tempo reale per il monitoraggio e l'analisi delle partite di pallavolo. Attraverso una pipeline dati always-on e un'interfaccia web interattiva, il sistema consente di raccogliere snapshot aggiornati di match live e calcolare una probabilità predittiva di vittoria per ciascuna squadra.
 
-**VolleyLive** è un sistema completo per il monitoraggio in tempo reale delle partite di pallavolo, con l’obiettivo di raccogliere, visualizzare e successivamente analizzare i dati live tramite predizioni basate su snapshot temporali.  
-Il progetto unisce una pipeline dati moderna con una web app interattiva, permettendo agli utenti di selezionare i match preferiti e attivare una catena di elaborazione che include strumenti come **Kafka**, **Logstash**, **Elasticsearch** e **Kibana**.
+Il progetto unisce streaming Kafka, analisi Spark, indicizzazione su Elasticsearch e visualizzazione frontend in un ecosistema containerizzato e scalabile.
 
 ---
 
 ## ⚙️ Architettura Tecnologica
 
-### 📦 1. Docker e Containerizzazione
+### 📦 Docker e Servizi
+Tutti i servizi sono orchestrati tramite Docker Compose. I container attivi includono:
 
-L'intero sistema è containerizzato tramite Docker Compose, con una rete isolata in cui comunicano i seguenti servizi:
-
-- **Zookeeper** e **Kafka** per la gestione dei flussi di dati (event streaming)
-- **Kafka-UI** per il monitoraggio dei topic
-- **Logstash** per trasformare e inoltrare i dati
-- **Elasticsearch** per l'indicizzazione e lo storage strutturato
-- **Kibana** per la visualizzazione grafica dei dati in tempo reale
-- **Spark** è predisposto per futuri sviluppi di Machine Learning sui dati snapshot, ma **attualmente non è ancora operativo**
-- **Backend** Un servizio HTTP che si interfaccia con il cluster Elasticsearch per fornire ricerche per match id
-
----
-
-### 🔁 2. Pipeline Dati
-
-- I dati delle partite live (come punteggi, set, stato partita) vengono prelevati via API e pubblicati su Kafka nel topic `matchvolley`
-- Logstash legge da Kafka, esegue trasformazioni (es. mapping dei punteggi, format JSON) e inoltra i dati a Elasticsearch
-- Kibana permette di visualizzare i dati in tempo reale in dashboard personalizzate
-- I dati raccolti costituiscono anche le **snapshot**, utilizzate per future predizioni tramite Spark
+- **Kafka**: gestisce il topic `matchvolley` per lo streaming dei dati
+- **Logstash**: trasforma e normalizza i dati prima dell'invio a Elasticsearch
+- **Elasticsearch**: indicizza i documenti (snapshot) arricchiti con predizione
+- **Kibana**: dashboard per ispezione e debug in tempo reale
+- **Spark**: calcola il campo `predicted_win` utilizzando un modello di regressione logistic trained offline
+- **Backend API (FastAPI)**: endpoint HTTP per recuperare i dati dei match da Elasticsearch
+- **Frontend (React/Next.js)**: interfaccia moderna per seguire i match e visualizzare la probabilità predetta
 
 ---
 
-### 🌐 3. Interfaccia Web (Frontend + Backend)
+## 🔁 Pipeline Dati
 
-La parte frontend è un’app moderna costruita con:
-
-- **React + Next.js** (App Router)
-- **TypeScript** per sicurezza e robustezza
-- **TailwindCSS** per uno styling reattivo e modulare
-- **Node.js** come runtime backend
-- **pnpm** per una gestione efficiente delle dipendenze
-- **Docker (Node 18)** per il deployment
-
-#### 🖥️ Funzionalità principali:
-- Visualizzazione delle partite in diretta con aggiornamenti in tempo reale
-- Possibilità di “seguire” (stellina) un match: questo attiva la pipeline di streaming dati per quella specifica partita
-- Statistiche e stato del match aggiornati ogni 10 secondi
-- Predizioni future basate sui dati raccolti per ciascuna partita
+1. ▶️ **Producer Python**: esegue polling delle partite live dalle API SportDevs, filtra solo i match "seguiti" dall'utente e pubblica gli snapshot sul topic Kafka `matchvolley`
+2. ▶️ **Spark Structured Streaming**:
+   - legge gli snapshot da Kafka
+   - estrae feature contestuali
+   - applica un modello predittivo pre-addestrato
+   - scrive il risultato su Elasticsearch
+3. ▶️ **Elasticsearch**: indicizza i documenti con campi come punteggio, set, odds e `predicted_win`
+4. ▶️ **Backend FastAPI**: fornisce un endpoint per recuperare uno snapshot tramite `match_id`
+5. ▶️ **Frontend**: visualizza match, probabilità predetta e set live in tempo reale
 
 ---
 
-## 📊 Predizioni e Analisi (Prossimi Sviluppi)
+## 📊 Predizione della Vittoria
 
-Il modulo Spark, già containerizzato, sarà utilizzato per analizzare le snapshot raccolte. Le snapshot sono strutture dati che rappresentano lo stato completo del match a intervalli regolari (es. ogni 10 secondi).  
-Da queste verranno estratte feature per:
+Il campo `predicted_win` rappresenta la probabilità (tra 0 e 1) di vittoria per la squadra di casa, calcolata punto per punto. Il modello considera:
 
-- Calcolare la **probabilità di vittoria** in tempo reale (WinScore)
-- Analizzare i **trend di squadra**
-- Migliorare l’esperienza dell’utente fornendo **insight predittivi**
+- differenziale di punteggio e set
+- andamento del set corrente
+- odds pre-partita
+- storico dei match precedenti
 
----
-
-## 🧩 Vantaggi del Sistema
-
-- ✅ Completamente **containerizzato** e **scalabile**
-- 🔄 Progettato per **flussi di dati real-time**
-- 🖥️ Interfaccia utente **moderna e reattiva**
-- 🧠 Predisposizione per **moduli avanzati di Machine Learning**
-- 📊 Dashboard **visiva** accessibile via Kibana
+La predizione viene aggiornata ogni 10 secondi e restituita insieme ai dati dello snapshot.
 
 ---
 
-## 📁 Struttura del Repository (ancora da schematizzare)
+## 💻 Interfaccia Utente
+
+- Costruita con **React + TailwindCSS**
+- Utilizza l'API FastAPI per recuperare i dati Elasticsearch
+- Visualizza:
+  - Stato dei set live
+  - Punteggio corrente
+  - Gauge della probabilità di vittoria (Predicted Win)
+  - Cronologia degli snapshot e andamento nel tempo
+
+---
+
+## 🧠 Machine Learning
+
+Il modello è addestrato offline con dataset CSV contenente snapshot etichettati (`target_win`). Viene serializzato in formato MLlib e caricato in Spark Streaming.
+
+**Algoritmo**: Logistic Regression con feature ingegnerizzate.
+
+**Metriche raggiunte**:
+- Accuracy: 74.62%
+- AUC-ROC: 0.8479
+- Brier Score: 0.1939
+
+---
+
+## 🔍 Debug e Osservabilità
+
+- **Kibana** è preconfigurato per interrogare l'indice `volleyball_matches`
+- **Kafka UI** permette di ispezionare i messaggi inviati nel topic
+- **Logstash e Spark** scrivono log dettagliati nella console
+
+---
+
+## 📁 Struttura del Repository
 
 ```
 .
@@ -82,13 +92,13 @@ Da queste verranno estratte feature per:
 │   └── logstash.conf           # Configurazione Logstash per la pipeline dati
 ├── spark/
 │   └── spark.py                # Codice Spark per analisi predittive (WIP)
-│   └── data/                   # Contiene live_snapshots_target.csv per il batch-training e pipeline model serializzato
-│   └── data/                   # Contiene il modello di predizione
+│   └── data/                   # Contiene live_snapshots_target.csv per il batch-training e pipeline model serializzato                
+│       └── model/              # Contiene il modello di predizione
 │   └── checkpoint/             # Contiene checkpoint per Elasticsearch streaming
 ├── frontend/                   # Web app React + Next.js
 ├── backtend/                   # Personal API di ricerca basata su Elasticsearch
-├── scripts/                    # Script Python per ingestione dati e API
-├── tests/                      # Test per Script Python Producer
+├── producer/                   # Producer API
+├── scripts/                    # Script Python per analisi
 ├── esdata/                     # Volume dati per Elasticsearch
 └── README.md
 ```
@@ -99,13 +109,13 @@ Da queste verranno estratte feature per:
 
 | Componente                  | Stato           |
 |-----------------------------|---------------- |
-| Web App React               | ⚠️ Operativo,front-end layout in miglioramento  |
+| Web App React               | ✅ Operativo     |
 | Kafka                       | ✅ Operativo    |
 | Logstash                    | ✅ Operativo    |
 | Elasticsearch               | ✅ Operativo    |
 | Kibana                      | ✅ Operativo    |
 | Spark                       | ✅ Operativo    |
-| Predizioni                  | ⚠️ Modello completato, fase di raccolta dati  |
+| Predizioni                  | ⚠️ Modello completato, miglioramento con raccolta dati  |
 | Integrazione API SportDevs  | ✅ Completata   |
 
 ---

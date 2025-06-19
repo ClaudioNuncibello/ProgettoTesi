@@ -260,11 +260,11 @@ export default function Home() {
                 </p>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="bg-white p-4 rounded-lg border border-gray-200">
-                    <div className="text-2xl font-bold text-secondary">???%</div>
+                    <div className="text-2xl font-bold text-secondary">74,62%</div>
                     <div className="text-sm text-gray-600">Accuratezza predizioni</div>
                   </div>
                   <div className="bg-white p-4 rounded-lg border border-gray-200">
-                    <div className="text-2xl font-bold text-volleyball-cyan">&lt; 1s</div>
+                    <div className="text-2xl font-bold text-volleyball-cyan">&lt; 3-6s</div>
                     <div className="text-sm text-gray-600">Latenza processing</div>
                   </div>
                 </div>
@@ -317,7 +317,7 @@ export default function Home() {
                     <div className="space-y-3">
                       <div className="flex justify-between items-center">
                         <span className="text-sm text-gray-400">Docker Containers</span>
-                        <span className="text-white">12/12</span>
+                        <span className="text-white">7/7</span>
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-sm text-gray-400">Elasticsearch VolleyApi</span>

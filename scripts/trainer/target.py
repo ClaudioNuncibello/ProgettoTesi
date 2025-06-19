@@ -14,7 +14,7 @@ HEADERS    = {
 }
 TIMEOUT    = 10  # secondi per la chiamata HTTP
 
-CSV_PATH   = '/Users/claudio/Documents/GitHub/ProgettoTesi/scripts/live_snapshots.csv'
+CSV_PATH   = '/Users/claudio/Documents/GitHub/ProgettoTesi/Producer/live_snapshots.csv'
 CACHE_PATH = '/Users/claudio/Documents/GitHub/ProgettoTesi/scripts/trainer/matches_cache.txt'
 OUT_PATH   = '/Users/claudio/Documents/GitHub/ProgettoTesi/spark/data/trainer_model.csv'
 
